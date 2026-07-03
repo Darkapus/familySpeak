@@ -9,6 +9,8 @@ services:
       - DATABASE_PATH=/app/backend/data/familyspeak.sqlite
       - MEDIA_DIR=/app/backend/media
     env_file: .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data/db:/app/backend/data
       - ./data/media:/app/backend/media

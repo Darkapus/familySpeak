@@ -1,8 +1,10 @@
 import type { FastifyInstance } from "fastify";
+import type { UserProfileDTO } from "@familyspeak/shared";
 import { requireAuth, requireRole } from "../auth/guard.js";
 import { hashPassword } from "../auth/password.js";
 import { revokeAllRefreshTokensForUser } from "../auth/refresh-token-repository.js";
 import { createUser, findUserByUsername, findUserById, listUsers, setUserActive, userToDTO } from "./repository.js";
+import { getProfile } from "../hermes/profileRepository.js";
 
 export async function registerUserRoutes(app: FastifyInstance) {
   app.get("/", { preHandler: requireAuth }, async () => {
@@ -56,4 +58,19 @@ export async function registerUserRoutes(app: FastifyInstance) {
       return { user: userToDTO({ ...user, isActive }) };
     },
   );
+
+  app.get<{ Params: { id: string } }>("/:id/profile", { preHandler: requireAuth }, async (request, reply) => {
+    const user = findUserById(request.params.id);
+    if (!user) {
+      return reply.code(404).send({ error: "Utilisateur introuvable" });
+    }
+
+    const existing = getProfile(request.params.id);
+    const profile: UserProfileDTO = {
+      userId: request.params.id,
+      profile: existing?.profile ?? null,
+      updatedAt: existing?.updatedAt ?? null,
+    };
+    return { profile };
+  });
 }

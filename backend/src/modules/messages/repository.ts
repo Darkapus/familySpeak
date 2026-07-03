@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull, lt } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { attachments, conversationMembers, messageReceipts, messages } from "../../db/schema.js";
 import type { AttachmentDTO, MessageDTO, MessageType } from "@familyspeak/shared";
@@ -97,6 +97,31 @@ export function listMessages(
   const nextBefore = rows.length === options.limit ? rows[rows.length - 1]!.createdAt : null;
 
   return { messages: rows.reverse().map(toDTO), nextBefore };
+}
+
+export function updateMessageContent(id: string, content: string): void {
+  db.update(messages).set({ content }).where(eq(messages.id, id)).run();
+}
+
+export function listMessagesInRange(
+  conversationId: string,
+  options: { after?: number; beforeExclusive?: number },
+): MessageDTO[] {
+  const conditions = [eq(messages.conversationId, conversationId), isNull(messages.deletedAt)];
+  if (options.after !== undefined) {
+    conditions.push(gt(messages.createdAt, options.after));
+  }
+  if (options.beforeExclusive !== undefined) {
+    conditions.push(lt(messages.createdAt, options.beforeExclusive));
+  }
+
+  return db
+    .select()
+    .from(messages)
+    .where(and(...conditions))
+    .orderBy(asc(messages.createdAt))
+    .all()
+    .map(toDTO);
 }
 
 export function markMessageRead(conversationId: string, messageId: string, userId: string): void {

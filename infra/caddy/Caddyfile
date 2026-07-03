@@ -1,8 +1,4 @@
-{$DOMAIN} {
-    tls {
-        dns duckdns {$DUCKDNS_API_TOKEN}
-    }
-
+(app) {
     handle /api/* {
         reverse_proxy backend:3000
     }
@@ -18,4 +14,28 @@
     }
 
     encode gzip
+}
+
+{$DOMAIN} {
+    tls {
+        dns duckdns {$DUCKDNS_API_TOKEN}
+        resolvers 1.1.1.1 8.8.8.8
+        propagation_delay 30s
+        propagation_timeout 5m
+    }
+
+    import app
+}
+
+www.baschet.fr {
+    tls {
+        dns ovh {
+            endpoint {$OVH_ENDPOINT}
+            application_key {$OVH_APPLICATION_KEY}
+            application_secret {$OVH_APPLICATION_SECRET}
+            consumer_key {$OVH_CONSUMER_KEY}
+        }
+    }
+
+    import app
 }

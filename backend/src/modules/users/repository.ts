@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { users } from "../../db/schema.js";
+import { env } from "../../config/env.js";
 import type { UserDTO, UserRole } from "@familyspeak/shared";
 
 type UserRow = typeof users.$inferSelect;
@@ -14,6 +15,7 @@ function toDTO(row: UserRow): UserDTO {
     role: row.role,
     isActive: row.isActive,
     createdAt: row.createdAt,
+    isAiAssistant: row.username === env.hermesBotUsername,
   };
 }
 
@@ -29,13 +31,21 @@ export function listUsers(): UserDTO[] {
   return db.select().from(users).all().map(toDTO);
 }
 
-export function createUser(input: {
+export function listUsersByRole(role: UserRole): UserDTO[] {
+  return db.select().from(users).where(eq(users.role, role)).all().map(toDTO);
+}
+
+export function hasAnyUser(): boolean {
+  return db.select({ id: users.id }).from(users).limit(1).get() !== undefined;
+}
+
+export function buildUserRow(input: {
   username: string;
   passwordHash: string;
   displayName: string;
   role: UserRole;
-}): UserDTO {
-  const row: UserRow = {
+}): UserRow {
+  return {
     id: crypto.randomUUID(),
     username: input.username,
     passwordHash: input.passwordHash,
@@ -45,6 +55,15 @@ export function createUser(input: {
     isActive: true,
     createdAt: Date.now(),
   };
+}
+
+export function createUser(input: {
+  username: string;
+  passwordHash: string;
+  displayName: string;
+  role: UserRole;
+}): UserDTO {
+  const row = buildUserRow(input);
   db.insert(users).values(row).run();
   return toDTO(row);
 }

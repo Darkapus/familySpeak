@@ -11,6 +11,22 @@ export const users = sqliteTable("users", {
   createdAt: integer("created_at").notNull(),
 });
 
+export const signupRequests = sqliteTable(
+  "signup_requests",
+  {
+    id: text("id").primaryKey(),
+    username: text("username").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    displayName: text("display_name").notNull(),
+    status: text("status", { enum: ["pending", "approved", "rejected"] }).notNull().default("pending"),
+    createdAt: integer("created_at").notNull(),
+    reviewedAt: integer("reviewed_at"),
+    reviewedBy: text("reviewed_by").references(() => users.id),
+    createdUserId: text("created_user_id").references(() => users.id),
+  },
+  (table) => [index("signup_requests_status_idx").on(table.status)],
+);
+
 export const conversations = sqliteTable("conversations", {
   id: text("id").primaryKey(),
   type: text("type", { enum: ["direct", "group"] }).notNull(),
@@ -102,6 +118,24 @@ export const pushSubscriptions = sqliteTable(
   },
   (table) => [index("push_subscriptions_user_id_idx").on(table.userId)],
 );
+
+export const hermesConversationSummaries = sqliteTable("hermes_conversation_summaries", {
+  conversationId: text("conversation_id")
+    .primaryKey()
+    .references(() => conversations.id),
+  summary: text("summary").notNull(),
+  summarizedUpToCreatedAt: integer("summarized_up_to_created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const userProfiles = sqliteTable("user_profiles", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id),
+  profile: text("profile").notNull(),
+  lastMessageConsideredCreatedAt: integer("last_message_considered_created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
 
 export const refreshTokens = sqliteTable(
   "refresh_tokens",

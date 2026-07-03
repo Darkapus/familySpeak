@@ -1,4 +1,4 @@
-import type { UserDTO } from "@familyspeak/shared";
+import type { UserDTO, UserProfileDTO } from "@familyspeak/shared";
 import { api } from "./client.js";
 
 export function listUsers() {
@@ -11,4 +11,8 @@ export function createChildUser(input: { username: string; password: string; dis
 
 export function setUserActive(userId: string, isActive: boolean) {
   return api.patch<{ user: UserDTO }>(`/users/${userId}/active`, { isActive });
+}
+
+export function fetchUserProfile(userId: string) {
+  return api.get<{ profile: UserProfileDTO }>(`/users/${userId}/profile`);
 }

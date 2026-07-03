@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../auth/guard.js";
 import { getConversationWithMembers, isMember } from "../conversations/repository.js";
 import { notifyOfflineMembers } from "../push/notify.js";
+import { triggerHermesAutoReply } from "../hermes/autoReply.js";
 import { broadcastToUsers } from "../../ws/registry.js";
 import { createTextMessage, listMessages } from "./repository.js";
 
@@ -52,6 +53,7 @@ export async function registerMessageRoutes(app: FastifyInstance) {
         { type: "message:new", payload: { message } },
       );
       notifyOfflineMembers(conversation, message);
+      triggerHermesAutoReply(conversation, message);
 
       return reply.code(201).send({ message });
     },

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { findUserByUsername, findUserById, userToDTO } from "../users/repository.js";
-import { verifyPassword } from "./password.js";
+import { createUser, findUserByUsername, findUserById, hasAnyUser, userToDTO } from "../users/repository.js";
+import { hashPassword, verifyPassword } from "./password.js";
 import { issueRefreshToken, findValidRefreshToken, revokeRefreshTokenById } from "./refresh-token-repository.js";
 import { requireAuth } from "./guard.js";
 import { env } from "../../config/env.js";
@@ -19,6 +19,40 @@ function setRefreshCookie(reply: import("fastify").FastifyReply, plain: string, 
 }
 
 export async function registerAuthRoutes(app: FastifyInstance) {
+  app.get("/setup-status", async () => {
+    return { needsSetup: !hasAnyUser() };
+  });
+
+  app.post<{ Body: { username: string; password: string; displayName: string } }>(
+    "/setup",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      if (hasAnyUser()) {
+        return reply.code(409).send({ error: "Un compte existe déjà" });
+      }
+
+      const { username, password, displayName } = request.body ?? {};
+      if (!username || !password || !displayName) {
+        return reply.code(400).send({ error: "username, password et displayName requis" });
+      }
+      if (password.length < 8) {
+        return reply.code(400).send({ error: "Le mot de passe doit contenir au moins 8 caractères" });
+      }
+
+      const passwordHash = await hashPassword(password);
+      if (hasAnyUser()) {
+        return reply.code(409).send({ error: "Un compte existe déjà" });
+      }
+      const user = createUser({ username, passwordHash, displayName, role: "parent" });
+
+      const accessToken = app.jwt.sign({ sub: user.id, role: user.role });
+      const { plain, expiresAt } = issueRefreshToken(user.id);
+      setRefreshCookie(reply, plain, expiresAt);
+
+      return reply.code(201).send({ accessToken, user });
+    },
+  );
+
   app.post<{ Body: { username: string; password: string } }>(
     "/login",
     { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },

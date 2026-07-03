@@ -11,6 +11,7 @@ import { registerConversationRoutes } from "./modules/conversations/routes.js";
 import { registerMessageRoutes } from "./modules/messages/routes.js";
 import { registerAttachmentUploadRoutes, registerAttachmentFileRoutes } from "./modules/attachments/routes.js";
 import { registerPushRoutes } from "./modules/push/routes.js";
+import { registerSignupRequestRoutes } from "./modules/signup-requests/routes.js";
 
 export function buildApp() {
   const app = Fastify({
@@ -40,6 +41,7 @@ export function buildApp() {
   app.register(registerAttachmentUploadRoutes, { prefix: "/api/conversations" });
   app.register(registerAttachmentFileRoutes, { prefix: "/api/attachments" });
   app.register(registerPushRoutes, { prefix: "/api/push" });
+  app.register(registerSignupRequestRoutes, { prefix: "/api/signup-requests" });
 
   return app;
 }

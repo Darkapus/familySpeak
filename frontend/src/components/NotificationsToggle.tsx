@@ -7,7 +7,9 @@ export function NotificationsToggle() {
   );
 
   if (!isPushSupported()) return null;
-  if (status === "enabled") return <span className="text-xs text-slate-400">🔔 Notifications activées</span>;
+  if (status === "enabled") {
+    return <p className="flex items-center gap-2 px-4 py-3 text-sm text-slate-400">🔔 Notifications activées</p>;
+  }
 
   async function handleClick() {
     setStatus("enabling");
@@ -19,9 +21,9 @@ export function NotificationsToggle() {
     <button
       onClick={handleClick}
       disabled={status === "enabling"}
-      className="rounded-lg bg-slate-200 px-2 py-1 text-xs hover:bg-slate-300 disabled:opacity-50"
+      className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
     >
-      {status === "denied" ? "Notifications refusées" : "🔔 Activer notifications"}
+      {status === "denied" ? "🔕 Notifications refusées" : "🔔 Activer les notifications"}
     </button>
   );
 }

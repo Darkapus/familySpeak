@@ -8,6 +8,17 @@ export interface UserDTO {
   role: UserRole;
   isActive: boolean;
   createdAt: number;
+  isAiAssistant: boolean;
+}
+
+export type SignupRequestStatus = "pending" | "approved" | "rejected";
+
+export interface SignupRequestDTO {
+  id: string;
+  username: string;
+  displayName: string;
+  status: SignupRequestStatus;
+  createdAt: number;
 }
 
 export type ConversationType = "direct" | "group";
@@ -52,4 +63,10 @@ export interface MessageReceiptDTO {
   userId: string;
   deliveredAt: number | null;
   readAt: number | null;
+}
+
+export interface UserProfileDTO {
+  userId: string;
+  profile: string | null;
+  updatedAt: number | null;
 }

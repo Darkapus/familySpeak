@@ -3,6 +3,7 @@ import type { ClientToServerEvent } from "@familyspeak/shared";
 import { getConversationWithMembers, isMember } from "../modules/conversations/repository.js";
 import { createTextMessage, findMessageById, markMessageRead } from "../modules/messages/repository.js";
 import { notifyOfflineMembers } from "../modules/push/notify.js";
+import { triggerHermesAutoReply } from "../modules/hermes/autoReply.js";
 import { broadcastToUsers, sendToUser } from "./registry.js";
 
 function sendError(socket: WebSocket, message: string): void {
@@ -60,6 +61,7 @@ function handleEvent(userId: string, socket: WebSocket, event: ClientToServerEve
         { type: "message:new", payload: { message } },
       );
       notifyOfflineMembers(conversation, message);
+      triggerHermesAutoReply(conversation, message);
       return;
     }
     case "typing:start":

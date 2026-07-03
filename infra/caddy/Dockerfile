@@ -1,5 +1,6 @@
 FROM caddy:2-builder AS caddy-builder
-RUN xcaddy build --with github.com/caddy-dns/duckdns
+ENV GOFLAGS="-buildvcs=false"
+RUN xcaddy build --with github.com/caddy-dns/duckdns@v0.5.0 --with github.com/caddy-dns/ovh
 
 FROM node:22-alpine AS frontend-builder
 RUN corepack enable

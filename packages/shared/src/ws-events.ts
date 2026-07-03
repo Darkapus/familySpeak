@@ -11,10 +11,12 @@ export type ClientToServerEvent =
 /** Messages envoyés du serveur vers le client. */
 export type ServerToClientEvent =
   | { type: "message:new"; payload: { message: MessageDTO } }
+  | { type: "message:delta"; payload: { messageId: string; conversationId: string; delta: string; done: boolean } }
   | { type: "message:ack"; payload: { tempId: string; messageId: string; conversationId: string; createdAt: number } }
   | { type: "message:delivered"; payload: { messageId: string; userId: string; at: number } }
   | { type: "message:read"; payload: { messageId: string; userId: string; at: number } }
   | { type: "typing:update"; payload: { conversationId: string; userId: string; isTyping: boolean } }
   | { type: "presence:update"; payload: { userId: string; status: "online" | "offline"; lastSeenAt: number } }
   | { type: "conversation:updated"; payload: { conversationId: string } }
+  | { type: "signup-request:new"; payload: { requestId: string } }
   | { type: "error"; payload: { message: string } };

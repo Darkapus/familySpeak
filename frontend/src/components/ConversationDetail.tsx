@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ComponentProps } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { MessageDTO } from "@familyspeak/shared";
 import { listConversations } from "../api/conversations.js";
 import { listMessages, sendMessage } from "../api/messages.js";
@@ -18,8 +20,36 @@ const TYPING_STOP_DELAY_MS = 2000;
 const EMPTY_TYPING_MAP: Record<string, boolean> = {};
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉"];
 
-export function ConversationDetail({ conversationId, onBack }: { conversationId: string; onBack: () => void }) {
+// Rendu markdown minimal pour les bulles de discussion : pas de plugin typography, on démonte
+// donc les marges par défaut du navigateur et on rétrograde les titres pour rester compact.
+const markdownComponents = {
+  p: (props: ComponentProps<"p">) => <p className="mb-1 last:mb-0" {...props} />,
+  ul: (props: ComponentProps<"ul">) => <ul className="mb-1 list-disc space-y-0.5 pl-5 last:mb-0" {...props} />,
+  ol: (props: ComponentProps<"ol">) => <ol className="mb-1 list-decimal space-y-0.5 pl-5 last:mb-0" {...props} />,
+  a: (props: ComponentProps<"a">) => <a className="underline" target="_blank" rel="noreferrer" {...props} />,
+  code: (props: ComponentProps<"code">) => <code className="rounded bg-black/10 px-1 py-0.5 font-mono text-sm" {...props} />,
+  pre: (props: ComponentProps<"pre">) => (
+    <pre className="mb-1 overflow-x-auto rounded-lg bg-black/10 p-2 font-mono text-sm last:mb-0" {...props} />
+  ),
+  blockquote: (props: ComponentProps<"blockquote">) => (
+    <blockquote className="border-l-2 border-current/30 pl-2 italic" {...props} />
+  ),
+  h1: (props: ComponentProps<"p">) => <p className="font-bold" {...props} />,
+  h2: (props: ComponentProps<"p">) => <p className="font-bold" {...props} />,
+  h3: (props: ComponentProps<"p">) => <p className="font-bold" {...props} />,
+};
+
+export function ConversationDetail({
+  conversationId,
+  onBack,
+  onOpenProfile,
+}: {
+  conversationId: string;
+  onBack: () => void;
+  onOpenProfile?: (userId: string, displayName: string) => void;
+}) {
   const currentUserId = useAuthStore((state) => state.user?.id);
+  const currentUserDisplayName = useAuthStore((state) => state.user?.displayName);
   const wsSend = useWsStore((state) => state.send);
   const queryClient = useQueryClient();
   const [content, setContent] = useState("");
@@ -38,6 +68,7 @@ export function ConversationDetail({ conversationId, onBack }: { conversationId:
 
   const typingUsers = useRealtimeStore((state) => state.typingByConversation[conversationId] ?? EMPTY_TYPING_MAP);
   const readByMessageId = useRealtimeStore((state) => state.readByMessageId);
+  const streamingMessageIds = useRealtimeStore((state) => state.streamingMessageIds);
   const presenceByUserId = useRealtimeStore((state) => state.presenceByUserId);
 
   const restMutation = useMutation({
@@ -173,7 +204,22 @@ export function ConversationDetail({ conversationId, onBack }: { conversationId:
             👨‍👩‍👧‍👦
           </div>
         ) : (
-          <Avatar id={headerAvatarId} name={headerName} size="md" />
+          <button
+            onClick={() => {
+              if (!otherMember) return;
+              // Le compte de l'IA n'a pas de profil : dans une conversation avec elle, son
+              // avatar ouvre plutôt le profil que l'IA a construit sur l'utilisateur courant.
+              if (otherMember.isAiAssistant && currentUserId && currentUserDisplayName) {
+                onOpenProfile?.(currentUserId, currentUserDisplayName);
+              } else {
+                onOpenProfile?.(otherMember.id, headerName);
+              }
+            }}
+            aria-label={`Voir le profil de ${headerName}`}
+            className="shrink-0 rounded-full"
+          >
+            <Avatar id={headerAvatarId} name={headerName} size="md" />
+          </button>
         )}
         <div className="min-w-0">
           <h2 className="truncate text-lg font-bold text-slate-800">{headerName}</h2>
@@ -193,6 +239,7 @@ export function ConversationDetail({ conversationId, onBack }: { conversationId:
             const pending = (message as PendingMessage).pending;
             const sender = conversation?.members.find((m) => m.id === message.senderId);
             const senderColor = avatarColorForId(message.senderId);
+            const isStreaming = streamingMessageIds[message.id] ?? false;
             return (
               <div key={message.id} className={`flex items-end gap-2 ${isOwn ? "justify-end" : "justify-start"}`}>
                 {!isOwn && conversation?.type === "group" && (
@@ -222,7 +269,13 @@ export function ConversationDetail({ conversationId, onBack }: { conversationId:
                       className="max-w-full rounded-2xl"
                     />
                   )}
-                  {message.type === "text" && <p className="text-base leading-snug">{message.content}</p>}
+                  {message.type === "text" && (
+                    <div className="text-base leading-snug">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                        {(message.content ?? "") + (isStreaming ? " ▍" : "")}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </div>
               </div>
             );

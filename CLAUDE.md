@@ -32,6 +32,26 @@ versionné (`.gitignore`). Voir `.env.example` pour la liste des variables.
 Healthcheck : `docker inspect --format='{{.State.Health.Status}}' familyspeak-backend-1`
 doit renvoyer `healthy` après un déploiement (peut prendre ~10-30s).
 
+### Domaine secondaire www.baschet.fr
+
+En plus de `visperine.duckdns.org`, l'appli est aussi servie nativement (vraie HTTPS, pas de
+frame/redirection masquée) sous `www.baschet.fr`. Le domaine est enregistré chez OVH.
+
+- **DNS chez OVH** : `www.baschet.fr` doit être un **CNAME vers `visperine.duckdns.org`**, pas
+  un enregistrement A statique. L'IP de la box est dynamique et déjà maintenue à jour par le
+  DDNS DuckDNS (client intégré à la box, pas de script sur cette machine) — un CNAME hérite
+  automatiquement de cette mise à jour, un A record chez OVH se figerait au prochain
+  changement d'IP.
+- **Certificat** : défi DNS-01 via le module Caddy `github.com/caddy-dns/ovh` (ajouté dans
+  `infra/caddy/Dockerfile`), avec des identifiants API OVH (`OVH_ENDPOINT=ovh-eu`,
+  `OVH_APPLICATION_KEY`, `OVH_APPLICATION_SECRET`, `OVH_CONSUMER_KEY` dans `.env`) ayant les
+  droits d'édition sur `/domain/zone/baschet.fr/*`. Générés sur https://api.ovh.com/createToken.
+- `infra/caddy/Caddyfile` a un bloc `www.baschet.fr` séparé (challenge OVH différent de celui
+  de `{$DOMAIN}`), les deux important le même snippet `(app)` pour éviter la duplication du
+  reverse proxy/fichiers statiques.
+- Le sous-domaine apex `baschet.fr` reste géré par la redirection web OVH (302 vers
+  `www.baschet.fr`) — inchangé, pas besoin de le pointer vers ce serveur.
+
 ## Stack technique
 
 - **Monorepo pnpm** : `backend/`, `frontend/`, `packages/shared/` (types + contrat WS partagés).

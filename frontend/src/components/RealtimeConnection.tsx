@@ -19,6 +19,20 @@ export function RealtimeConnection() {
         });
         return;
       }
+      case "message:delta": {
+        const { messageId, conversationId, delta, done } = event.payload;
+        if (delta) {
+          queryClient.setQueryData<MessagesQueryData>(["messages", conversationId], (old) => {
+            if (!old) return old;
+            return {
+              ...old,
+              messages: old.messages.map((m) => (m.id === messageId ? { ...m, content: (m.content ?? "") + delta } : m)),
+            };
+          });
+        }
+        useRealtimeStore.getState().setStreaming(messageId, !done);
+        return;
+      }
       case "message:ack": {
         const { tempId, messageId, conversationId, createdAt } = event.payload;
         queryClient.setQueryData<MessagesQueryData>(["messages", conversationId], (old) => {
@@ -43,6 +57,10 @@ export function RealtimeConnection() {
       case "message:read": {
         const { messageId, userId } = event.payload;
         useRealtimeStore.getState().setRead(messageId, userId);
+        return;
+      }
+      case "signup-request:new": {
+        void queryClient.invalidateQueries({ queryKey: ["signupRequests"] });
         return;
       }
       default:
