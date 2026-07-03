@@ -1,0 +1,14 @@
+{
+  "name": "familyspeak",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev:backend": "pnpm --filter @familyspeak/backend dev",
+    "dev:frontend": "pnpm --filter @familyspeak/frontend dev",
+    "build": "pnpm -r build",
+    "create-admin": "pnpm --filter @familyspeak/backend create-admin"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
