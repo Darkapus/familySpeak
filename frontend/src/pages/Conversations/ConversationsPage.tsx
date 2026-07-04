@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ConversationList } from "../../components/ConversationList.js";
 import { ConversationDetail } from "../../components/ConversationDetail.js";
 import { NewConversationPanel } from "../../components/NewConversationPanel.js";
@@ -11,6 +12,7 @@ import { logout } from "../../api/auth.js";
 import { useAuthStore } from "../../store/auth.js";
 
 export function ConversationsPage() {
+  const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showNewConversation, setShowNewConversation] = useState(false);
@@ -55,6 +57,13 @@ export function ConversationsPage() {
               className="flex min-h-11 flex-1 items-center justify-center gap-1 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-emerald-600 shadow hover:bg-emerald-50"
             >
               💬 Nouvelle discussion
+            </button>
+            <button
+              onClick={() => navigate("/game")}
+              aria-label="Espace de jeu"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20 text-lg text-white hover:bg-white/30"
+            >
+              🧱
             </button>
             {user?.role === "parent" && (
               <button

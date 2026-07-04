@@ -23,6 +23,7 @@ export const env = {
   accessTokenTtl: readEnv("ACCESS_TOKEN_TTL", "15m"),
   refreshTokenTtlDays: Number(readEnv("REFRESH_TOKEN_TTL_DAYS", "30")),
   cookieSecure: readEnv("COOKIE_SECURE", nodeEnv === "development" ? "false" : "true") === "true",
+  gameEnabled: readEnv("GAME_ENABLED", "false") === "true",
   hermesEnabled: readEnv("HERMES_ENABLED", "false") === "true",
   hermesApiUrl: readEnv("HERMES_API_URL", "http://host.docker.internal:8642"),
   hermesApiKey: readEnv("HERMES_API_KEY", ""),

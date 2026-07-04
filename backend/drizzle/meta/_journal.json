@@ -29,6 +29,13 @@
       "when": 1783083193501,
       "tag": "0003_milky_madelyne_pryor",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1783118053982,
+      "tag": "0004_silent_frightful_four",
+      "breakpoints": true
     }
   ]
 }

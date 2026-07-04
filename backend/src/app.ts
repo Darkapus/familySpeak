@@ -12,6 +12,7 @@ import { registerMessageRoutes } from "./modules/messages/routes.js";
 import { registerAttachmentUploadRoutes, registerAttachmentFileRoutes } from "./modules/attachments/routes.js";
 import { registerPushRoutes } from "./modules/push/routes.js";
 import { registerSignupRequestRoutes } from "./modules/signup-requests/routes.js";
+import { registerGameRoutes } from "./modules/game/routes.js";
 
 export function buildApp() {
   const app = Fastify({
@@ -42,6 +43,7 @@ export function buildApp() {
   app.register(registerAttachmentFileRoutes, { prefix: "/api/attachments" });
   app.register(registerPushRoutes, { prefix: "/api/push" });
   app.register(registerSignupRequestRoutes, { prefix: "/api/signup-requests" });
+  app.register(registerGameRoutes, { prefix: "/api/game" });
 
   return app;
 }

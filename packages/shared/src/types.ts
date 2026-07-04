@@ -1,3 +1,5 @@
+import type { GameBlockType } from "./game.js";
+
 export type UserRole = "parent" | "child";
 
 export interface UserDTO {
@@ -69,4 +71,22 @@ export interface UserProfileDTO {
   userId: string;
   profile: string | null;
   updatedAt: number | null;
+}
+
+export interface WorldBlockDTO {
+  x: number;
+  y: number;
+  z: number;
+  blockType: GameBlockType | null;
+  updatedAt: number;
+}
+
+export interface GamePlayerStateDTO {
+  userId: string;
+  displayName: string;
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  pitch: number;
 }

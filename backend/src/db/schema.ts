@@ -137,6 +137,21 @@ export const userProfiles = sqliteTable("user_profiles", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+export const worldBlocks = sqliteTable(
+  "world_blocks",
+  {
+    x: integer("x").notNull(),
+    y: integer("y").notNull(),
+    z: integer("z").notNull(),
+    blockType: text("block_type", {
+      enum: ["grass", "dirt", "stone", "wood", "sand", "red", "blue", "yellow"],
+    }),
+    placedBy: text("placed_by").references(() => users.id),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.x, table.y, table.z] })],
+);
+
 export const refreshTokens = sqliteTable(
   "refresh_tokens",
   {

@@ -2,7 +2,7 @@ import fp from "fastify-plugin";
 import fastifyWebsocket from "@fastify/websocket";
 import type { FastifyInstance } from "fastify";
 import { addConnection, broadcastToUsers, isUserOnline, removeConnection } from "../ws/registry.js";
-import { handleClientMessage } from "../ws/handlers.js";
+import { handleClientMessage, handleGameDisconnect } from "../ws/handlers.js";
 import { listConversationPartnerIds } from "../modules/conversations/repository.js";
 
 export default fp(async function websocketPlugin(app: FastifyInstance) {
@@ -48,6 +48,7 @@ export default fp(async function websocketPlugin(app: FastifyInstance) {
           payload: { userId, status: "offline", lastSeenAt: Date.now() },
         });
       }
+      handleGameDisconnect(userId);
     });
   });
 });

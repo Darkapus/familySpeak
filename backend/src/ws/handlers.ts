@@ -1,10 +1,25 @@
 import type { WebSocket } from "@fastify/websocket";
-import type { ClientToServerEvent } from "@familyspeak/shared";
+import {
+  isGameBlockType,
+  isWithinGameWorldBounds,
+  isWithinGameWorldBoundsContinuous,
+  type ClientToServerEvent,
+} from "@familyspeak/shared";
+import { env } from "../config/env.js";
 import { getConversationWithMembers, isMember } from "../modules/conversations/repository.js";
 import { createTextMessage, findMessageById, markMessageRead } from "../modules/messages/repository.js";
 import { notifyOfflineMembers } from "../modules/push/notify.js";
 import { triggerHermesAutoReply } from "../modules/hermes/autoReply.js";
+import { findUserById, listUsers } from "../modules/users/repository.js";
+import { playerJoin, playerLeave, queueMove } from "../modules/game/liveState.js";
+import { upsertWorldBlock } from "../modules/game/repository.js";
 import { broadcastToUsers, sendToUser } from "./registry.js";
+
+function otherUserIds(excludeUserId: string): string[] {
+  return listUsers()
+    .map((u) => u.id)
+    .filter((id) => id !== excludeUserId);
+}
 
 function sendError(socket: WebSocket, message: string): void {
   if (socket.readyState === socket.OPEN) {
@@ -88,7 +103,76 @@ function handleEvent(userId: string, socket: WebSocket, event: ClientToServerEve
     }
     case "presence:ping":
       return;
+    case "game:join": {
+      if (!env.gameEnabled) {
+        sendError(socket, "Jeu désactivé");
+        return;
+      }
+      const user = findUserById(userId);
+      if (!user) return;
+      const { self, others } = playerJoin(userId, user.displayName);
+      sendToUser(userId, { type: "game:snapshot", payload: { players: others } });
+      broadcastToUsers(otherUserIds(userId), { type: "game:player-joined", payload: self });
+      return;
+    }
+    case "game:leave": {
+      if (!env.gameEnabled) return;
+      if (playerLeave(userId)) {
+        broadcastToUsers(otherUserIds(userId), { type: "game:player-left", payload: { userId } });
+      }
+      return;
+    }
+    case "game:move": {
+      if (!env.gameEnabled) return;
+      const { x, y, z, yaw, pitch } = event.payload;
+      if (!isWithinGameWorldBoundsContinuous(x, y, z)) return;
+      queueMove(userId, { x, y, z, yaw, pitch });
+      return;
+    }
+    case "game:place": {
+      if (!env.gameEnabled) {
+        sendError(socket, "Jeu désactivé");
+        return;
+      }
+      const { x, y, z, blockType } = event.payload;
+      if (!isWithinGameWorldBounds(x, y, z) || !isGameBlockType(blockType)) {
+        sendError(socket, "Placement de bloc invalide");
+        return;
+      }
+      upsertWorldBlock(x, y, z, blockType, userId);
+      broadcastToUsers(
+        listUsers().map((u) => u.id),
+        { type: "game:block-changed", payload: { x, y, z, blockType } },
+      );
+      return;
+    }
+    case "game:break": {
+      if (!env.gameEnabled) {
+        sendError(socket, "Jeu désactivé");
+        return;
+      }
+      const { x, y, z } = event.payload;
+      if (!isWithinGameWorldBounds(x, y, z)) {
+        sendError(socket, "Case invalide");
+        return;
+      }
+      upsertWorldBlock(x, y, z, null, userId);
+      broadcastToUsers(
+        listUsers().map((u) => u.id),
+        { type: "game:block-changed", payload: { x, y, z, blockType: null } },
+      );
+      return;
+    }
     default:
       return;
+  }
+}
+
+/** Appelé par le plugin WS à la fermeture d'une connexion, pour couvrir les déconnexions brutales
+ * (onglet tué...) qu'un `game:leave` envoyé par le client peut manquer. */
+export function handleGameDisconnect(userId: string): void {
+  if (!env.gameEnabled) return;
+  if (playerLeave(userId)) {
+    broadcastToUsers(otherUserIds(userId), { type: "game:player-left", payload: { userId } });
   }
 }
