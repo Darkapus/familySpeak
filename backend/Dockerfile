@@ -15,6 +15,11 @@ COPY packages/shared packages/shared
 COPY backend backend
 COPY tsconfig.base.json tsconfig.base.json
 RUN pnpm --filter @familyspeak/shared build
+# En dev, main/types pointent vers src/index.ts : tsx et vite transpilent du TS à la volée donc
+# ça fonctionne tel quel. En prod, seul dist/ est copié dans l'image finale (pas de transpileur au
+# runtime) : on réécrit ces champs ici, dans le package.json copié dans l'image, sans toucher au
+# fichier du dépôt (qui doit rester pointé vers src/ pour le dev).
+RUN cd packages/shared && pnpm pkg set main=./dist/index.js types=./dist/index.d.ts
 RUN pnpm --filter @familyspeak/backend build
 
 FROM base AS runtime
