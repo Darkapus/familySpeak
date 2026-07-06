@@ -55,3 +55,41 @@ export function createAvatar(displayName: string): AvatarHandle {
 
   return { group, dispose };
 }
+
+const HOME_POLE_COLOR = 0x8d6e63;
+const HOME_FLAG_COLOR = 0xe53935;
+const HOME_POLE_HEIGHT = 2.2;
+
+/** Marqueur du repère de spawn personnel d'un joueur (poteau + fanion + nom) — visuellement
+ * distinct d'un avatar de joueur en ligne, visible même quand son propriétaire est déconnecté. */
+export function createHomeMarker(displayName: string): AvatarHandle {
+  const group = new THREE.Group();
+
+  const poleGeometry = new THREE.CylinderGeometry(0.05, 0.05, HOME_POLE_HEIGHT, 6);
+  const poleMaterial = new THREE.MeshLambertMaterial({ color: HOME_POLE_COLOR });
+  const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+  pole.position.set(0, HOME_POLE_HEIGHT / 2, 0);
+  group.add(pole);
+
+  const flagGeometry = new THREE.PlaneGeometry(0.6, 0.4);
+  const flagMaterial = new THREE.MeshLambertMaterial({ color: HOME_FLAG_COLOR, side: THREE.DoubleSide });
+  const flag = new THREE.Mesh(flagGeometry, flagMaterial);
+  flag.position.set(0.3, HOME_POLE_HEIGHT - 0.3, 0);
+  group.add(flag);
+
+  const nameSprite = createNameSprite(displayName);
+  nameSprite.position.set(0, HOME_POLE_HEIGHT + 0.4, 0);
+  group.add(nameSprite);
+
+  function dispose() {
+    poleGeometry.dispose();
+    poleMaterial.dispose();
+    flagGeometry.dispose();
+    flagMaterial.dispose();
+    const spriteMaterial = nameSprite.material as THREE.SpriteMaterial;
+    spriteMaterial.map?.dispose();
+    spriteMaterial.dispose();
+  }
+
+  return { group, dispose };
+}

@@ -137,6 +137,18 @@ export const userProfiles = sqliteTable("user_profiles", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+export const playerHomes = sqliteTable("player_homes", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id),
+  x: real("x").notNull(),
+  y: real("y").notNull(),
+  z: real("z").notNull(),
+  yaw: real("yaw").notNull(),
+  pitch: real("pitch").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const worldBlocks = sqliteTable(
   "world_blocks",
   {

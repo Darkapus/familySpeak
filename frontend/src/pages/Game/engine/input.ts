@@ -14,6 +14,7 @@ export interface GameInputState {
   jumpPressed: boolean;
   breakRequested: boolean;
   placeRequested: boolean;
+  homeRequested: boolean;
   selectedBlockType: GameBlockType;
 }
 
@@ -26,6 +27,7 @@ export function createInputState(): GameInputState {
     jumpPressed: false,
     breakRequested: false,
     placeRequested: false,
+    homeRequested: false,
     selectedBlockType: GAME_BLOCK_TYPES[0],
   };
 }
@@ -51,6 +53,7 @@ export function attachDesktopControls(canvas: HTMLCanvasElement, state: GameInpu
   function onKeyDown(event: KeyboardEvent) {
     heldKeys.add(event.code);
     if (event.code === "Space") event.preventDefault();
+    if (event.code === "KeyH") state.homeRequested = true;
     const digitIndex = DIGIT_KEY_CODES.indexOf(event.code);
     if (digitIndex !== -1 && digitIndex < GAME_BLOCK_TYPES.length) {
       state.selectedBlockType = GAME_BLOCK_TYPES[digitIndex]!;

@@ -1,4 +1,4 @@
-import type { GamePlayerStateDTO, MessageDTO } from "./types.js";
+import type { GamePlayerStateDTO, MessageDTO, PlayerHomeDTO } from "./types.js";
 import type { GameBlockType } from "./game.js";
 
 /** Messages envoyés du client vers le serveur. */
@@ -12,7 +12,8 @@ export type ClientToServerEvent =
   | { type: "game:leave"; payload: Record<string, never> }
   | { type: "game:move"; payload: { x: number; y: number; z: number; yaw: number; pitch: number } }
   | { type: "game:place"; payload: { x: number; y: number; z: number; blockType: GameBlockType } }
-  | { type: "game:break"; payload: { x: number; y: number; z: number } };
+  | { type: "game:break"; payload: { x: number; y: number; z: number } }
+  | { type: "game:set-home"; payload: { x: number; y: number; z: number; yaw: number; pitch: number } };
 
 /** Messages envoyés du serveur vers le client. */
 export type ServerToClientEvent =
@@ -25,9 +26,10 @@ export type ServerToClientEvent =
   | { type: "presence:update"; payload: { userId: string; status: "online" | "offline"; lastSeenAt: number } }
   | { type: "conversation:updated"; payload: { conversationId: string } }
   | { type: "signup-request:new"; payload: { requestId: string } }
-  | { type: "game:snapshot"; payload: { players: GamePlayerStateDTO[] } }
+  | { type: "game:snapshot"; payload: { self: GamePlayerStateDTO; players: GamePlayerStateDTO[] } }
   | { type: "game:player-joined"; payload: GamePlayerStateDTO }
   | { type: "game:player-left"; payload: { userId: string } }
   | { type: "game:player-moved"; payload: { userId: string; x: number; y: number; z: number; yaw: number; pitch: number } }
   | { type: "game:block-changed"; payload: { x: number; y: number; z: number; blockType: GameBlockType | null } }
+  | { type: "game:home-set"; payload: PlayerHomeDTO }
   | { type: "error"; payload: { message: string } };

@@ -90,3 +90,13 @@ export interface GamePlayerStateDTO {
   yaw: number;
   pitch: number;
 }
+
+export interface PlayerHomeDTO {
+  userId: string;
+  displayName: string;
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  pitch: number;
+}

@@ -1,3 +1,5 @@
+import { GAME_WORLD_SIZE_X, GAME_WORLD_SIZE_Z, wrapCoord } from "@familyspeak/shared";
+
 export const PLAYER_HALF_WIDTH = 0.3;
 export const PLAYER_HALF_DEPTH = 0.3;
 export const PLAYER_HEIGHT = 1.8;
@@ -94,5 +96,16 @@ export function stepPlayer(
     y = targetY;
   }
 
-  return { x, y, z, vx, vy, vz, grounded };
+  // Le monde boucle sur lui-même (torique) : on enroule x/z pour que la position stockée reste
+  // toujours dans l'espace canonique [0, taille), utilisé pour calculer le chunk courant, envoyer
+  // game:move, etc. isSolid() gère déjà l'enroulement en interne, donc rien à changer ci-dessus.
+  return {
+    x: wrapCoord(x, GAME_WORLD_SIZE_X),
+    y,
+    z: wrapCoord(z, GAME_WORLD_SIZE_Z),
+    vx,
+    vy,
+    vz,
+    grounded,
+  };
 }

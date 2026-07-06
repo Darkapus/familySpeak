@@ -129,6 +129,16 @@ export function TouchControls({ inputState }: { inputState: GameInputState }) {
       >
         🧱
       </button>
+      <button
+        onPointerDown={(event) => {
+          event.preventDefault();
+          inputState.homeRequested = true;
+        }}
+        aria-label="Définir mon repère ici"
+        className="absolute right-3 top-3 h-11 w-11 touch-none rounded-full bg-white/20 text-lg"
+      >
+        🚩
+      </button>
     </>
   );
 }

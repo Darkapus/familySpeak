@@ -5,10 +5,16 @@
  * terrain de base sans avoir besoin de se synchroniser.
  */
 
-export const GAME_WORLD_SIZE_X = 48;
-export const GAME_WORLD_SIZE_Z = 48;
+export const GAME_WORLD_SIZE_X = 512;
+export const GAME_WORLD_SIZE_Z = 512;
 export const GAME_WORLD_HEIGHT = 24;
 export const GAME_WORLD_SEED = 20260703;
+
+// Le monde est découpé en zones (chunks) chargées/déchargées autour du joueur plutôt que
+// d'être tenu en mémoire d'un bloc — indispensable à cette taille sur un téléphone.
+export const CHUNK_SIZE = 16; // doit diviser GAME_WORLD_SIZE_X/Z exactement (512/16 = 32 par axe)
+export const RENDER_DISTANCE_CHUNKS = 3; // rayon en chunks autour du joueur (7x7 = 49 chunks) —
+// seul réglage à tourner pour équilibrer distance de vue et consommation machine.
 
 export const GAME_BLOCK_TYPES = ["grass", "dirt", "stone", "wood", "sand", "red", "blue", "yellow"] as const;
 export type GameBlockType = (typeof GAME_BLOCK_TYPES)[number];
@@ -48,12 +54,30 @@ export function isWithinGameWorldBoundsContinuous(x: number, y: number, z: numbe
   );
 }
 
-const NOISE_LATTICE_SCALE = 10;
+/** Enroule une coordonnée dans [0, size) — modulo qui gère aussi les valeurs négatives. Utilisé
+ * partout où x/z doivent boucler sur eux-mêmes (monde torique : pas de bord, on ressort de
+ * l'autre côté). Ne s'applique jamais à y (la hauteur reste bornée, elle ne boucle pas). */
+export function wrapCoord(value: number, size: number): number {
+  return ((value % size) + size) % size;
+}
+
+/** Index de chunk (0..size/CHUNK_SIZE-1) contenant une coordonnée donnée, après enroulement. */
+export function chunkIndexForCoord(coord: number, size: number): number {
+  return Math.floor(wrapCoord(coord, size) / CHUNK_SIZE);
+}
+
+// Doit diviser GAME_WORLD_SIZE_X et GAME_WORLD_SIZE_Z exactement pour que le bruit boucle sans
+// discontinuité au bord (sinon le point x=size-epsilon et x=0 ne se raccordent pas).
+const NOISE_LATTICE_SCALE = 8;
+const LATTICE_PERIOD_X = GAME_WORLD_SIZE_X / NOISE_LATTICE_SCALE;
+const LATTICE_PERIOD_Z = GAME_WORLD_SIZE_Z / NOISE_LATTICE_SCALE;
 
 function hashLatticePoint(x: number, z: number): number {
+  const wx = wrapCoord(x, LATTICE_PERIOD_X);
+  const wz = wrapCoord(z, LATTICE_PERIOD_Z);
   let h = GAME_WORLD_SEED;
-  h = Math.imul(h ^ x, 374761393);
-  h = Math.imul(h ^ z, 668265263);
+  h = Math.imul(h ^ wx, 374761393);
+  h = Math.imul(h ^ wz, 668265263);
   h ^= h >>> 13;
   h = Math.imul(h, 1274126177);
   h ^= h >>> 16;
@@ -74,18 +98,12 @@ function valueNoiseAt(x: number, z: number): number {
   return nx0 + (nx1 - nx0) * sz;
 }
 
-/** Hauteur (0..GAME_WORLD_HEIGHT-1) du terrain de base à une case (x,z) donnée. */
+/** Hauteur (0..GAME_WORLD_HEIGHT-1) du terrain de base à une case (x,z) donnée. Périodique sur
+ * GAME_WORLD_SIZE_X/Z : pas de "bord" — le monde boucle sur lui-même comme une planète. */
 export function terrainHeightAt(x: number, z: number): number {
-  const cx = GAME_WORLD_SIZE_X / 2;
-  const cz = GAME_WORLD_SIZE_Z / 2;
-  const dx = (x - cx) / cx;
-  const dz = (z - cz) / cz;
-  const distFromCenter = Math.sqrt(dx * dx + dz * dz);
-  const islandFalloff = Math.max(0, 1 - distFromCenter * distFromCenter);
-
   const noise = valueNoiseAt(x / NOISE_LATTICE_SCALE, z / NOISE_LATTICE_SCALE);
   const rawHeight = 6 + noise * 6;
-  const height = Math.round(rawHeight * islandFalloff);
+  const height = Math.round(rawHeight);
   return Math.max(0, Math.min(GAME_WORLD_HEIGHT - 1, height));
 }
 

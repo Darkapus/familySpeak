@@ -1,9 +1,8 @@
 import * as THREE from "three";
 import {
+  CHUNK_SIZE,
   GAME_BLOCK_TYPES,
   GAME_WORLD_HEIGHT,
-  GAME_WORLD_SIZE_X,
-  GAME_WORLD_SIZE_Z,
   baseTerrainBlockAt,
   type GameBlockType,
   type WorldBlockDTO,
@@ -16,50 +15,64 @@ const BLOCK_TYPE_IDS = Object.fromEntries(GAME_BLOCK_TYPES.map((type, i) => [typ
 >;
 const ID_TO_BLOCK_TYPE: (GameBlockType | null)[] = [null, ...GAME_BLOCK_TYPES];
 
-/** Grille dense en mémoire des blocs solides du monde (terrain de base + deltas appliqués). */
+/**
+ * Grille dense en mémoire d'un seul chunk (CHUNK_SIZE × GAME_WORLD_HEIGHT × CHUNK_SIZE), indexée
+ * en coordonnées locales 0..CHUNK_SIZE-1. `originX`/`originZ` situent ce chunk dans l'espace
+ * monde canonique — utilisés pour générer son terrain de base et positionner son mesh, jamais
+ * pour l'indexation interne. Les faces au bord d'un chunk ne sont pas fusionnées avec le chunk
+ * voisin (chaque chunk se maille indépendamment) : simplification acceptée, sans impact
+ * fonctionnel, juste quelques faces superflues invisibles à la jointure.
+ */
 export class WorldGrid {
-  private cells = new Uint8Array(GAME_WORLD_SIZE_X * GAME_WORLD_HEIGHT * GAME_WORLD_SIZE_Z);
+  private cells = new Uint8Array(CHUNK_SIZE * GAME_WORLD_HEIGHT * CHUNK_SIZE);
 
-  static index(x: number, y: number, z: number): number {
-    return x + z * GAME_WORLD_SIZE_X + y * GAME_WORLD_SIZE_X * GAME_WORLD_SIZE_Z;
+  constructor(
+    public readonly originX: number,
+    public readonly originZ: number,
+  ) {}
+
+  private static index(lx: number, y: number, lz: number): number {
+    return lx + lz * CHUNK_SIZE + y * CHUNK_SIZE * CHUNK_SIZE;
   }
 
-  static inBounds(x: number, y: number, z: number): boolean {
-    return (
-      x >= 0 && x < GAME_WORLD_SIZE_X && y >= 0 && y < GAME_WORLD_HEIGHT && z >= 0 && z < GAME_WORLD_SIZE_Z
-    );
+  private static inBounds(lx: number, y: number, lz: number): boolean {
+    return lx >= 0 && lx < CHUNK_SIZE && y >= 0 && y < GAME_WORLD_HEIGHT && lz >= 0 && lz < CHUNK_SIZE;
   }
 
-  getBlockType(x: number, y: number, z: number): GameBlockType | null {
-    if (!WorldGrid.inBounds(x, y, z)) return null;
-    return ID_TO_BLOCK_TYPE[this.cells[WorldGrid.index(x, y, z)]!] ?? null;
+  getBlockType(lx: number, y: number, lz: number): GameBlockType | null {
+    if (!WorldGrid.inBounds(lx, y, lz)) return null;
+    return ID_TO_BLOCK_TYPE[this.cells[WorldGrid.index(lx, y, lz)]!] ?? null;
   }
 
-  isSolid(x: number, y: number, z: number): boolean {
-    if (!WorldGrid.inBounds(x, y, z)) return false;
-    return this.cells[WorldGrid.index(x, y, z)] !== AIR;
+  isSolid(lx: number, y: number, lz: number): boolean {
+    if (!WorldGrid.inBounds(lx, y, lz)) return false;
+    return this.cells[WorldGrid.index(lx, y, lz)] !== AIR;
   }
 
-  setBlock(x: number, y: number, z: number, blockType: GameBlockType | null): void {
-    if (!WorldGrid.inBounds(x, y, z)) return;
-    this.cells[WorldGrid.index(x, y, z)] = blockType ? BLOCK_TYPE_IDS[blockType] : AIR;
+  setBlock(lx: number, y: number, lz: number, blockType: GameBlockType | null): void {
+    if (!WorldGrid.inBounds(lx, y, lz)) return;
+    this.cells[WorldGrid.index(lx, y, lz)] = blockType ? BLOCK_TYPE_IDS[blockType] : AIR;
   }
 
   private fillFromTerrain(): void {
-    for (let x = 0; x < GAME_WORLD_SIZE_X; x++) {
-      for (let z = 0; z < GAME_WORLD_SIZE_Z; z++) {
+    for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+      for (let lz = 0; lz < CHUNK_SIZE; lz++) {
         for (let y = 0; y < GAME_WORLD_HEIGHT; y++) {
-          const type = baseTerrainBlockAt(x, y, z);
-          if (type) this.cells[WorldGrid.index(x, y, z)] = BLOCK_TYPE_IDS[type];
+          const type = baseTerrainBlockAt(this.originX + lx, y, this.originZ + lz);
+          if (type) this.cells[WorldGrid.index(lx, y, lz)] = BLOCK_TYPE_IDS[type];
         }
       }
     }
   }
 
-  static fromDeltas(deltas: WorldBlockDTO[]): WorldGrid {
-    const grid = new WorldGrid();
+  /** Construit la grille d'un chunk à partir de son origine monde ; `deltas` doit déjà être
+   * filtré pour ce chunk (c'est ce que renvoie l'API `/game/chunks`). */
+  static fromDeltas(originX: number, originZ: number, deltas: WorldBlockDTO[]): WorldGrid {
+    const grid = new WorldGrid(originX, originZ);
     grid.fillFromTerrain();
-    for (const delta of deltas) grid.setBlock(delta.x, delta.y, delta.z, delta.blockType);
+    for (const delta of deltas) {
+      grid.setBlock(delta.x - originX, delta.y, delta.z - originZ, delta.blockType);
+    }
     return grid;
   }
 }
@@ -90,7 +103,10 @@ interface FaceBuffer {
   indices: number[];
 }
 
-/** Construit un mesh fusionné par type de bloc, en ne générant que les faces exposées à l'air. */
+/** Construit un mesh fusionné par type de bloc pour un chunk, en coordonnées monde canoniques
+ * (`grid.originX/originZ` + décalage local). Le décalage d'enroulement pour le rendu torique
+ * (voir `chunkManager.ts`) est appliqué séparément, sur le groupe qui contient ces meshes — pas
+ * ici, pour ne jamais avoir à reconstruire la géométrie quand seule la position visuelle change. */
 export function buildTerrainMeshes(grid: WorldGrid): Map<GameBlockType, THREE.Mesh> {
   const buffers = new Map<GameBlockType, FaceBuffer>();
 
@@ -103,18 +119,18 @@ export function buildTerrainMeshes(grid: WorldGrid): Map<GameBlockType, THREE.Me
     return buffer;
   }
 
-  for (let x = 0; x < GAME_WORLD_SIZE_X; x++) {
+  for (let lx = 0; lx < CHUNK_SIZE; lx++) {
     for (let y = 0; y < GAME_WORLD_HEIGHT; y++) {
-      for (let z = 0; z < GAME_WORLD_SIZE_Z; z++) {
-        const type = grid.getBlockType(x, y, z);
+      for (let lz = 0; lz < CHUNK_SIZE; lz++) {
+        const type = grid.getBlockType(lx, y, lz);
         if (!type) continue;
         const buffer = bufferFor(type);
         for (const face of FACES) {
           const [dx, dy, dz] = face.dir;
-          if (grid.isSolid(x + dx, y + dy, z + dz)) continue;
+          if (grid.isSolid(lx + dx, y + dy, lz + dz)) continue;
           const startIndex = buffer.positions.length / 3;
           for (const [cx, cy, cz] of face.corners) {
-            buffer.positions.push(x + cx, y + cy, z + cz);
+            buffer.positions.push(grid.originX + lx + cx, y + cy, grid.originZ + lz + cz);
             buffer.normals.push(dx, dy, dz);
           }
           buffer.indices.push(startIndex, startIndex + 1, startIndex + 2, startIndex, startIndex + 2, startIndex + 3);

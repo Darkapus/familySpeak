@@ -12,7 +12,7 @@ import { notifyOfflineMembers } from "../modules/push/notify.js";
 import { triggerHermesAutoReply } from "../modules/hermes/autoReply.js";
 import { findUserById, listUsers } from "../modules/users/repository.js";
 import { playerJoin, playerLeave, queueMove } from "../modules/game/liveState.js";
-import { upsertWorldBlock } from "../modules/game/repository.js";
+import { getPlayerHome, upsertPlayerHome, upsertWorldBlock } from "../modules/game/repository.js";
 import { broadcastToUsers, sendToUser } from "./registry.js";
 
 function otherUserIds(excludeUserId: string): string[] {
@@ -110,8 +110,9 @@ function handleEvent(userId: string, socket: WebSocket, event: ClientToServerEve
       }
       const user = findUserById(userId);
       if (!user) return;
-      const { self, others } = playerJoin(userId, user.displayName);
-      sendToUser(userId, { type: "game:snapshot", payload: { players: others } });
+      const home = getPlayerHome(userId);
+      const { self, others } = playerJoin(userId, user.displayName, home);
+      sendToUser(userId, { type: "game:snapshot", payload: { self, players: others } });
       broadcastToUsers(otherUserIds(userId), { type: "game:player-joined", payload: self });
       return;
     }
@@ -160,6 +161,25 @@ function handleEvent(userId: string, socket: WebSocket, event: ClientToServerEve
       broadcastToUsers(
         listUsers().map((u) => u.id),
         { type: "game:block-changed", payload: { x, y, z, blockType: null } },
+      );
+      return;
+    }
+    case "game:set-home": {
+      if (!env.gameEnabled) {
+        sendError(socket, "Jeu désactivé");
+        return;
+      }
+      const { x, y, z, yaw, pitch } = event.payload;
+      if (!isWithinGameWorldBoundsContinuous(x, y, z)) {
+        sendError(socket, "Position invalide");
+        return;
+      }
+      const user = findUserById(userId);
+      if (!user) return;
+      upsertPlayerHome(userId, x, y, z, yaw, pitch);
+      broadcastToUsers(
+        listUsers().map((u) => u.id),
+        { type: "game:home-set", payload: { userId, displayName: user.displayName, x, y, z, yaw, pitch } },
       );
       return;
     }
