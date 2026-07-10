@@ -16,8 +16,11 @@ export const CHUNK_SIZE = 16; // doit diviser GAME_WORLD_SIZE_X/Z exactement (51
 export const RENDER_DISTANCE_CHUNKS = 3; // rayon en chunks autour du joueur (7x7 = 49 chunks) —
 // seul réglage à tourner pour équilibrer distance de vue et consommation machine.
 
-export const GAME_BLOCK_TYPES = ["grass", "dirt", "stone", "wood", "sand", "red", "blue", "yellow"] as const;
+export const GAME_BLOCK_TYPES = ["grass", "dirt", "stone", "wood", "sand", "red", "blue", "yellow", "water"] as const;
 export type GameBlockType = (typeof GAME_BLOCK_TYPES)[number];
+
+/** Niveau de la mer : toute case d'air à cette hauteur ou en dessous devient de l'eau. */
+export const WATER_LEVEL = 6;
 
 export function isGameBlockType(value: string): value is GameBlockType {
   return (GAME_BLOCK_TYPES as readonly string[]).includes(value);
@@ -52,6 +55,12 @@ export function isWithinGameWorldBoundsContinuous(x: number, y: number, z: numbe
     z >= 0 &&
     z < GAME_WORLD_SIZE_Z
   );
+}
+
+/** La couche la plus basse du monde est infranchissable ("bedrock"), sinon casser le dernier
+ * bloc sous ses pieds laisse un trou sans fond et le joueur tombe indéfiniment sous le monde. */
+export function isBedrock(y: number): boolean {
+  return y <= 0;
 }
 
 /** Enroule une coordonnée dans [0, size) — modulo qui gère aussi les valeurs négatives. Utilisé
@@ -99,22 +108,30 @@ function valueNoiseAt(x: number, z: number): number {
 }
 
 /** Hauteur (0..GAME_WORLD_HEIGHT-1) du terrain de base à une case (x,z) donnée. Périodique sur
- * GAME_WORLD_SIZE_X/Z : pas de "bord" — le monde boucle sur lui-même comme une planète. */
+ * GAME_WORLD_SIZE_X/Z : pas de "bord" — le monde boucle sur lui-même comme une planète.
+ * Amplitude volontairement large (4..14) pour que les creux du relief passent sous WATER_LEVEL
+ * et forment des lacs/étangs sans changer l'algorithme de bruit. */
 export function terrainHeightAt(x: number, z: number): number {
   const noise = valueNoiseAt(x / NOISE_LATTICE_SCALE, z / NOISE_LATTICE_SCALE);
-  const rawHeight = 6 + noise * 6;
+  const rawHeight = 4 + noise * 10;
   const height = Math.round(rawHeight);
   return Math.max(0, Math.min(GAME_WORLD_HEIGHT - 1, height));
 }
 
-/** Bloc de terrain de base (avant application des deltas joueurs) à une case donnée, ou null pour l'air. */
+/** Bloc de terrain de base (avant application des deltas joueurs) à une case donnée, ou null pour l'air.
+ * Les cases d'air à WATER_LEVEL ou en dessous deviennent de l'eau (remplit les creux en lacs) ; l'eau
+ * n'est pas solide (comme l'air), pas de mécanique de nage. */
 export function baseTerrainBlockAt(x: number, y: number, z: number): GameBlockType | null {
   const height = terrainHeightAt(x, z);
-  if (y > height) return null;
+  if (y > height) {
+    return y <= WATER_LEVEL ? "water" : null;
+  }
   if (height <= 1) {
     return y === height ? "sand" : "stone";
   }
-  if (y === height) return "grass";
+  if (y === height) {
+    return height <= WATER_LEVEL + 1 ? "sand" : "grass";
+  }
   if (y >= height - 2) return "dirt";
   return "stone";
 }

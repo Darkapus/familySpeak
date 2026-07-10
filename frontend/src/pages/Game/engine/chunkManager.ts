@@ -29,7 +29,7 @@ function chunkKey(cx: number, cz: number): string {
  * très inférieur à la demi-taille du monde, ce choix n'est jamais ambigu — c'est ce qui rend le
  * passage d'un bord invisible : le chunk "de l'autre côté" du monde est dessiné juste à côté du
  * joueur plutôt qu'à sa position canonique, potentiellement lointaine. */
-function nearestOffset(chunkOrigin: number, playerCoord: number, worldSize: number): number {
+export function nearestOffset(chunkOrigin: number, playerCoord: number, worldSize: number): number {
   let best = chunkOrigin - worldSize;
   let bestDist = Math.abs(best - playerCoord);
   for (const candidate of [chunkOrigin, chunkOrigin + worldSize]) {

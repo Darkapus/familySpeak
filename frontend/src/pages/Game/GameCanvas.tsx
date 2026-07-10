@@ -4,6 +4,7 @@ import {
   GAME_WORLD_HEIGHT,
   GAME_WORLD_SIZE_X,
   GAME_WORLD_SIZE_Z,
+  isBedrock,
   isWithinGameWorldBounds,
   wrapCoord,
   type GameBlockType,
@@ -14,11 +15,12 @@ import {
 import { fetchWorldInfo } from "../../api/game.js";
 import { useWebSocket } from "../../hooks/useWebSocket.js";
 import { useWsStore } from "../../store/ws.js";
-import { ChunkManager } from "./engine/chunkManager.js";
+import { ChunkManager, nearestOffset } from "./engine/chunkManager.js";
 import { attachDesktopControls, createInputState, inputToWorldMove } from "./engine/input.js";
 import { createPlayerPhysicsState, stepPlayer, PLAYER_EYE_HEIGHT } from "./engine/player.js";
 import { raycastVoxels } from "./engine/raycast.js";
 import { createAvatar, createHomeMarker, type AvatarHandle } from "./engine/avatar.js";
+import { SkySystem } from "./engine/sky.js";
 import { TouchControls } from "./components/TouchControls.js";
 import { BlockPalette } from "./components/BlockPalette.js";
 
@@ -31,6 +33,14 @@ const MAX_DT = 1 / 20;
 const MAX_REACH = 6;
 const MOVE_SEND_INTERVAL_MS = 100;
 const AVATAR_LERP_SPEED = 10;
+const FALL_RESCUE_Y = -5;
+
+/** Écart signé le plus court entre deux coordonnées sur un axe torique (dans (-size/2, size/2]) —
+ * utilisé pour interpoler la position d'un joueur distant en franchissant un bord dans le bon
+ * sens plutôt qu'en traversant toute la carte dans l'autre direction. */
+function wrapDelta(target: number, current: number, size: number): number {
+  return wrapCoord(target - current + size / 2, size) - size / 2;
+}
 
 interface RemoteAvatarState {
   avatar: AvatarHandle;
@@ -115,7 +125,7 @@ export function GameCanvas() {
     let pendingSpawn: { x: number; y: number; z: number; yaw: number; pitch: number } | null = null;
     const inputState = inputStateRef.current;
     const remoteAvatars = new Map<string, RemoteAvatarState>();
-    const homeMarkers = new Map<string, AvatarHandle>();
+    const homeMarkers = new Map<string, { handle: AvatarHandle; x: number; y: number; z: number }>();
 
     const canvas = document.createElement("canvas");
     canvas.className = "absolute inset-0 block h-full w-full cursor-pointer";
@@ -124,6 +134,7 @@ export function GameCanvas() {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87ceeb);
     const chunkManager = new ChunkManager(scene);
+    const sky = new SkySystem(scene);
 
     const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 500);
     camera.rotation.order = "YXZ";
@@ -131,11 +142,6 @@ export function GameCanvas() {
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    const sun = new THREE.DirectionalLight(0xffffff, 0.7);
-    sun.position.set(1, 1.5, 0.5);
-    scene.add(sun);
 
     function resize() {
       const { clientWidth, clientHeight } = container!;
@@ -172,13 +178,13 @@ export function GameCanvas() {
     function upsertHomeMarker(home: PlayerHomeDTO) {
       const existing = homeMarkers.get(home.userId);
       if (existing) {
-        scene.remove(existing.group);
-        existing.dispose();
+        scene.remove(existing.handle.group);
+        existing.handle.dispose();
       }
-      const marker = createHomeMarker(home.displayName);
-      marker.group.position.set(home.x, home.y, home.z);
-      scene.add(marker.group);
-      homeMarkers.set(home.userId, marker);
+      const handle = createHomeMarker(home.displayName);
+      handle.group.position.set(home.x, home.y, home.z);
+      scene.add(handle.group);
+      homeMarkers.set(home.userId, { handle, x: home.x, y: home.y, z: home.z });
     }
 
     gameApiRef.current = {
@@ -231,7 +237,7 @@ export function GameCanvas() {
         const placeX = wrapCoord(hit.px, GAME_WORLD_SIZE_X);
         const placeZ = wrapCoord(hit.pz, GAME_WORLD_SIZE_Z);
 
-        if (inputState.breakRequested) {
+        if (inputState.breakRequested && !isBedrock(hit.y)) {
           chunkManager.applyBlockChange(hitX, hit.y, hitZ, null);
           wsSendRef.current?.({ type: "game:break", payload: { x: hitX, y: hit.y, z: hitZ } });
         } else if (inputState.placeRequested && isWithinGameWorldBounds(placeX, hit.py, placeZ)) {
@@ -256,6 +262,8 @@ export function GameCanvas() {
       const dt = Math.min((now - lastTime) / 1000, MAX_DT);
       lastTime = now;
 
+      sky.update(Date.now(), dt, playerState.x, playerState.y, playerState.z);
+
       if (controls) {
         controls.update();
         const { moveX, moveZ } = inputToWorldMove(inputState);
@@ -265,6 +273,15 @@ export function GameCanvas() {
           dt,
           (x, y, z) => chunkManager.isSolid(x, y, z),
         );
+
+        // Filet de sécurité : la couche y=0 est censée être infranchissable (bedrock), mais si un
+        // joueur se retrouve quand même sous le monde par un autre biais, on le renvoie à son
+        // dernier repère connu plutôt que de le laisser chuter indéfiniment dans le vide.
+        if (playerState.y < FALL_RESCUE_Y) {
+          const rescue = pendingSpawn ?? { x: SPAWN_X, y: GAME_WORLD_HEIGHT, z: SPAWN_Z };
+          playerState = createPlayerPhysicsState(rescue.x, rescue.y, rescue.z);
+        }
+
         camera.position.set(playerState.x, playerState.y + PLAYER_EYE_HEIGHT, playerState.z);
         camera.rotation.y = inputState.yaw;
         camera.rotation.x = inputState.pitch;
@@ -309,12 +326,27 @@ export function GameCanvas() {
 
       const lerpAlpha = Math.min(1, dt * AVATAR_LERP_SPEED);
       for (const { avatar, target, render } of remoteAvatars.values()) {
-        render.x += (target.x - render.x) * lerpAlpha;
+        // Le monde est torique : interpoler la distance la plus courte (potentiellement en
+        // franchissant un bord) plutôt que la différence brute, sinon un joueur qui traverse un
+        // bord semble faire un aller-retour à travers toute la carte.
+        render.x += wrapDelta(target.x, render.x, GAME_WORLD_SIZE_X) * lerpAlpha;
         render.y += (target.y - render.y) * lerpAlpha;
-        render.z += (target.z - render.z) * lerpAlpha;
+        render.z += wrapDelta(target.z, render.z, GAME_WORLD_SIZE_Z) * lerpAlpha;
         render.yaw += (target.yaw - render.yaw) * lerpAlpha;
-        avatar.group.position.set(render.x, render.y, render.z);
+        // Puis, comme pour les chunks, on affiche la copie (parmi les 3 possibles) la plus proche
+        // du joueur local — sinon un avatar distant à l'autre bout de la carte (mais tout proche
+        // une fois le monde enroulé) se retrouve rendu à des centaines d'unités, hors du champ de
+        // vue voire au-delà du plan de clipping éloigné de la caméra : invisible.
+        const displayX = nearestOffset(render.x, playerState.x, GAME_WORLD_SIZE_X);
+        const displayZ = nearestOffset(render.z, playerState.z, GAME_WORLD_SIZE_Z);
+        avatar.group.position.set(displayX, render.y, displayZ);
         avatar.group.rotation.y = render.yaw;
+      }
+
+      for (const { handle, x, y, z } of homeMarkers.values()) {
+        const displayX = nearestOffset(x, playerState.x, GAME_WORLD_SIZE_X);
+        const displayZ = nearestOffset(z, playerState.z, GAME_WORLD_SIZE_Z);
+        handle.group.position.set(displayX, y, displayZ);
       }
 
       renderer.render(scene, camera);
@@ -338,8 +370,9 @@ export function GameCanvas() {
       resizeObserver.disconnect();
       controls?.dispose();
       chunkManager.dispose();
+      sky.dispose();
       for (const userId of remoteAvatars.keys()) removeRemoteAvatar(userId);
-      for (const marker of homeMarkers.values()) marker.dispose();
+      for (const { handle } of homeMarkers.values()) handle.dispose();
       homeMarkers.clear();
       renderer.dispose();
       container.removeChild(canvas);

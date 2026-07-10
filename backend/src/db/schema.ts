@@ -156,7 +156,7 @@ export const worldBlocks = sqliteTable(
     y: integer("y").notNull(),
     z: integer("z").notNull(),
     blockType: text("block_type", {
-      enum: ["grass", "dirt", "stone", "wood", "sand", "red", "blue", "yellow"],
+      enum: ["grass", "dirt", "stone", "wood", "sand", "red", "blue", "yellow", "water"],
     }),
     placedBy: text("placed_by").references(() => users.id),
     updatedAt: integer("updated_at").notNull(),

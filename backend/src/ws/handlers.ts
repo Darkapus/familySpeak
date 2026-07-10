@@ -1,5 +1,6 @@
 import type { WebSocket } from "@fastify/websocket";
 import {
+  isBedrock,
   isGameBlockType,
   isWithinGameWorldBounds,
   isWithinGameWorldBoundsContinuous,
@@ -153,7 +154,7 @@ function handleEvent(userId: string, socket: WebSocket, event: ClientToServerEve
         return;
       }
       const { x, y, z } = event.payload;
-      if (!isWithinGameWorldBounds(x, y, z)) {
+      if (!isWithinGameWorldBounds(x, y, z) || isBedrock(y)) {
         sendError(socket, "Case invalide");
         return;
       }

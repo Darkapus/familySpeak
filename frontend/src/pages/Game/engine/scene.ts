@@ -44,9 +44,12 @@ export class WorldGrid {
     return ID_TO_BLOCK_TYPE[this.cells[WorldGrid.index(lx, y, lz)]!] ?? null;
   }
 
+  /** L'eau n'est pas solide (comme l'air) : pas de mécanique de nage, un joueur qui y entre
+   * traverse jusqu'au fond, et les faces de blocs voisins de l'eau restent rendues (transparence). */
   isSolid(lx: number, y: number, lz: number): boolean {
     if (!WorldGrid.inBounds(lx, y, lz)) return false;
-    return this.cells[WorldGrid.index(lx, y, lz)] !== AIR;
+    const id = this.cells[WorldGrid.index(lx, y, lz)]!;
+    return id !== AIR && ID_TO_BLOCK_TYPE[id] !== "water";
   }
 
   setBlock(lx: number, y: number, lz: number, blockType: GameBlockType | null): void {
@@ -86,6 +89,7 @@ export const BLOCK_COLORS: Record<GameBlockType, number> = {
   red: 0xe53935,
   blue: 0x1e88e5,
   yellow: 0xfdd835,
+  water: 0x2f6fb8,
 };
 
 const FACES = [
@@ -127,7 +131,14 @@ export function buildTerrainMeshes(grid: WorldGrid): Map<GameBlockType, THREE.Me
         const buffer = bufferFor(type);
         for (const face of FACES) {
           const [dx, dy, dz] = face.dir;
-          if (grid.isSolid(lx + dx, y + dy, lz + dz)) continue;
+          // Cas particulier de l'eau : culler seulement les faces internes à un même bassin
+          // (voisin aussi eau), sinon chaque interface eau-eau dessine un quad transparent
+          // superflu (surcoût + artefacts de tri de transparence à l'intérieur d'un lac).
+          if (type === "water") {
+            if (grid.getBlockType(lx + dx, y + dy, lz + dz) === "water") continue;
+          } else if (grid.isSolid(lx + dx, y + dy, lz + dz)) {
+            continue;
+          }
           const startIndex = buffer.positions.length / 3;
           for (const [cx, cy, cz] of face.corners) {
             buffer.positions.push(grid.originX + lx + cx, y + cy, grid.originZ + lz + cz);
@@ -145,7 +156,10 @@ export function buildTerrainMeshes(grid: WorldGrid): Map<GameBlockType, THREE.Me
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(buffer.positions, 3));
     geometry.setAttribute("normal", new THREE.Float32BufferAttribute(buffer.normals, 3));
     geometry.setIndex(buffer.indices);
-    const material = new THREE.MeshLambertMaterial({ color: BLOCK_COLORS[type] });
+    const material =
+      type === "water"
+        ? new THREE.MeshLambertMaterial({ color: BLOCK_COLORS[type], transparent: true, opacity: 0.75 })
+        : new THREE.MeshLambertMaterial({ color: BLOCK_COLORS[type] });
     meshes.set(type, new THREE.Mesh(geometry, material));
   }
   return meshes;
