@@ -161,3 +161,26 @@ export interface ChessLessonDTO {
   readAt: number | null;
   generatedAt: number;
 }
+
+/** Un exercice tiré d'une vraie erreur de l'enfant (pas d'un jeu de données externe) : on lui
+ * remontre la position juste avant sa faute et on lui demande de retrouver le meilleur coup. */
+export interface ChessPuzzleDTO {
+  moveEvalId: string;
+  gameId: string;
+  fen: string;
+  sideToMove: ChessPlayerColor;
+  bestMoveSan: string;
+  bestMoveUci: string;
+  category: WeaknessCategory;
+  centipawnLoss: number;
+}
+
+/** Un point de la courbe de progression : une partie analysée, avec la perte moyenne de
+ * centipions et le nombre d'erreurs de l'enfant sur cette partie. */
+export interface ChessProgressPointDTO {
+  gameId: string;
+  playedAt: number;
+  avgCentipawnLoss: number;
+  mistakeCount: number;
+  moveCount: number;
+}

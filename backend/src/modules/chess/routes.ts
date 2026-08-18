@@ -13,9 +13,11 @@ import {
   enqueueAnalysisJob,
   getGameById,
   insertImportedGame,
+  listGameProgressStats,
   listGamesForUser,
   listLessonsForUser,
   listMoveEvalsForGame,
+  listRecentMistakesForUser,
   listWeaknessProfile,
   markLessonRead,
   pruneOldChessComGames,
@@ -169,6 +171,25 @@ export async function registerChessRoutes(app: FastifyInstance) {
     if (!canAccess(request, targetUserId)) return reply.code(403).send({ error: "forbidden" });
     return { profile: listWeaknessProfile(targetUserId) };
   });
+
+  app.get<{ Querystring: { userId?: string } }>("/progress", { preHandler: requireAuth }, async (request, reply) => {
+    if (!env.chessEnabled) return reply.code(403).send({ error: "Module échecs désactivé" });
+    const targetUserId = request.query.userId ?? request.user.sub;
+    if (!canAccess(request, targetUserId)) return reply.code(403).send({ error: "forbidden" });
+    return { points: listGameProgressStats(targetUserId) };
+  });
+
+  app.get<{ Querystring: { userId?: string; limit?: string } }>(
+    "/puzzles",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      if (!env.chessEnabled) return reply.code(403).send({ error: "Module échecs désactivé" });
+      const targetUserId = request.query.userId ?? request.user.sub;
+      if (!canAccess(request, targetUserId)) return reply.code(403).send({ error: "forbidden" });
+      const limit = Math.min(Number(request.query.limit ?? "10") || 10, 30);
+      return { puzzles: listRecentMistakesForUser(targetUserId, limit) };
+    },
+  );
 
   app.get<{ Querystring: { userId?: string } }>("/lessons", { preHandler: requireAuth }, async (request, reply) => {
     if (!env.chessEnabled) return reply.code(403).send({ error: "Module échecs désactivé" });

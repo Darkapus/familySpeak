@@ -4,6 +4,8 @@ import type {
   ChessLessonDTO,
   ChessMoveEvalDTO,
   ChessPlayerColor,
+  ChessProgressPointDTO,
+  ChessPuzzleDTO,
   ChessWeaknessProfileEntryDTO,
 } from "@familyspeak/shared";
 import { api } from "./client.js";
@@ -53,6 +55,15 @@ export function fetchChessLessons(userId?: string) {
 
 export function markChessLessonRead(lessonId: string) {
   return api.post<{ ok: true }>(`/chess/lessons/${lessonId}/read`);
+}
+
+export function fetchChessProgress(userId?: string) {
+  const query = userId ? `?userId=${encodeURIComponent(userId)}` : "";
+  return api.get<{ points: ChessProgressPointDTO[] }>(`/chess/progress${query}`);
+}
+
+export function fetchChessPuzzles(limit = 10) {
+  return api.get<{ puzzles: ChessPuzzleDTO[] }>(`/chess/puzzles?limit=${limit}`);
 }
 
 export function askChessPositionChat(input: {

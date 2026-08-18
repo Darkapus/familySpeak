@@ -1,24 +1,44 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useChessGame } from "./hooks/useChessGame.js";
 import { useChessRealtimeSync } from "./hooks/useChessRealtimeSync.js";
+import { fetchChessProgress } from "../../api/chess.js";
 import { ChessBoard } from "./components/ChessBoard.js";
 import { DifficultySelector } from "./components/DifficultySelector.js";
 import { GameHistoryList } from "./components/GameHistoryList.js";
 import { GameReplay } from "./components/GameReplay.js";
 import { ImportPanel } from "./components/ImportPanel.js";
+import { ProgressChart } from "./components/ProgressChart.js";
 import { WeaknessProfilePanel } from "./components/WeaknessProfilePanel.js";
 import { LessonsPanel } from "./components/LessonsPanel.js";
+import { PuzzleTrainer } from "./components/PuzzleTrainer.js";
 import { PositionChat } from "./components/PositionChat.js";
 
-type Tab = "play" | "games" | "profile" | "lessons";
+type Tab = "play" | "games" | "progress" | "puzzles" | "lessons";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "play", label: "♟️ Jouer" },
   { id: "games", label: "📜 Parties" },
-  { id: "profile", label: "📊 Progrès" },
+  { id: "progress", label: "📊 Progrès" },
+  { id: "puzzles", label: "🧩 Exercices" },
   { id: "lessons", label: "🎓 Leçons" },
 ];
+
+function ProgressTab() {
+  const { data, isLoading } = useQuery({ queryKey: ["chess", "progress"], queryFn: () => fetchChessProgress() });
+
+  if (isLoading) return <p className="p-4 text-sm text-slate-400">Chargement…</p>;
+
+  return (
+    <div>
+      <ProgressChart points={data?.points ?? []} />
+      <div className="border-t border-slate-100">
+        <WeaknessProfilePanel />
+      </div>
+    </div>
+  );
+}
 
 // Composant séparé pour que le Worker Stockfish (WASM, ~7 Mo) ne soit chargé que quand l'enfant
 // ouvre réellement l'onglet "Jouer", pas à chaque visite de la page échecs.
@@ -114,8 +134,10 @@ export function ChessPage() {
             <ImportPanel />
             <GameHistoryList onSelect={setSelectedGameId} />
           </div>
-        ) : tab === "profile" ? (
-          <WeaknessProfilePanel />
+        ) : tab === "progress" ? (
+          <ProgressTab />
+        ) : tab === "puzzles" ? (
+          <PuzzleTrainer />
         ) : (
           <LessonsPanel />
         )}

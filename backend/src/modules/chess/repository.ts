@@ -13,6 +13,8 @@ import type {
   ChessLessonDTO,
   ChessMoveEvalDTO,
   ChessPlayerColor,
+  ChessProgressPointDTO,
+  ChessPuzzleDTO,
   ChessWeaknessProfileEntryDTO,
   MoveQuality,
   WeaknessCategory,
@@ -60,6 +62,27 @@ function moveEvalToDTO(row: ChessMoveEvalRow): ChessMoveEvalDTO {
     mistakeCategory: row.mistakeCategory,
   };
 }
+
+// Sélection explicite des colonnes de chess_move_evals (plutôt que select() sans argument) :
+// nécessaire dès qu'on joint chess_games, sinon drizzle imbrique le résultat par table au lieu
+// de renvoyer la forme plate attendue par moveEvalToDTO.
+const moveEvalColumns = {
+  id: chessMoveEvals.id,
+  userId: chessMoveEvals.userId,
+  gameId: chessMoveEvals.gameId,
+  ply: chessMoveEvals.ply,
+  movedBy: chessMoveEvals.movedBy,
+  fenBefore: chessMoveEvals.fenBefore,
+  moveSan: chessMoveEvals.moveSan,
+  moveUci: chessMoveEvals.moveUci,
+  bestMoveSan: chessMoveEvals.bestMoveSan,
+  bestMoveUci: chessMoveEvals.bestMoveUci,
+  evalBeforeCp: chessMoveEvals.evalBeforeCp,
+  evalAfterCp: chessMoveEvals.evalAfterCp,
+  centipawnLoss: chessMoveEvals.centipawnLoss,
+  quality: chessMoveEvals.quality,
+  mistakeCategory: chessMoveEvals.mistakeCategory,
+};
 
 function lessonToDTO(row: ChessLessonRow): ChessLessonDTO {
   return {
@@ -226,19 +249,85 @@ export function listMoveEvalsForGame(gameId: string): ChessMoveEvalDTO[] {
     .map(moveEvalToDTO);
 }
 
+// Joint chess_games et filtre movedBy = playerColor : chess_move_evals.userId est dénormalisé
+// depuis la partie et couvre donc les DEUX camps (l'enfant et son adversaire/le moteur), pas
+// seulement les coups joués par l'enfant.
 export function listWorstMovesForCategory(
   userId: string,
   category: WeaknessCategory,
   limit: number,
 ): ChessMoveEvalDTO[] {
   return db
-    .select()
+    .select(moveEvalColumns)
     .from(chessMoveEvals)
-    .where(and(eq(chessMoveEvals.userId, userId), eq(chessMoveEvals.mistakeCategory, category)))
+    .innerJoin(chessGames, eq(chessMoveEvals.gameId, chessGames.id))
+    .where(
+      and(
+        eq(chessMoveEvals.userId, userId),
+        eq(chessMoveEvals.mistakeCategory, category),
+        eq(chessMoveEvals.movedBy, chessGames.playerColor),
+      ),
+    )
     .orderBy(desc(chessMoveEvals.centipawnLoss))
     .limit(limit)
     .all()
     .map(moveEvalToDTO);
+}
+
+/** Les pires coups de l'enfant, toutes catégories confondues — sert de base aux exercices
+ * (chess_puzzle) : plutôt qu'un jeu de données externe, on lui refait rejouer ses propres
+ * erreurs les plus coûteuses. */
+export function listRecentMistakesForUser(userId: string, limit: number): ChessPuzzleDTO[] {
+  const rows = db
+    .select(moveEvalColumns)
+    .from(chessMoveEvals)
+    .innerJoin(chessGames, eq(chessMoveEvals.gameId, chessGames.id))
+    .where(
+      and(
+        eq(chessMoveEvals.userId, userId),
+        eq(chessMoveEvals.movedBy, chessGames.playerColor),
+        sql`${chessMoveEvals.mistakeCategory} is not null`,
+      ),
+    )
+    .orderBy(desc(chessMoveEvals.centipawnLoss))
+    .limit(limit)
+    .all();
+
+  return rows.map((row) => ({
+    moveEvalId: row.id,
+    gameId: row.gameId,
+    fen: row.fenBefore,
+    sideToMove: row.movedBy,
+    bestMoveSan: row.bestMoveSan,
+    bestMoveUci: row.bestMoveUci,
+    category: row.mistakeCategory!,
+    centipawnLoss: row.centipawnLoss,
+  }));
+}
+
+/** Une entrée par partie analysée de l'enfant, dans l'ordre chronologique : perte moyenne de
+ * centipions et nombre d'erreurs sur ses propres coups. Sert à visualiser la progression dans
+ * le temps (par opposition au profil de faiblesses, qui n'est qu'un instantané cumulé). */
+export function listGameProgressStats(userId: string): ChessProgressPointDTO[] {
+  const games = db
+    .select()
+    .from(chessGames)
+    .where(and(eq(chessGames.userId, userId), eq(chessGames.analysisStatus, "done")))
+    .orderBy(chessGames.playedAt)
+    .all();
+
+  return games.map((game) => {
+    const ownMoves = db
+      .select({ centipawnLoss: chessMoveEvals.centipawnLoss, quality: chessMoveEvals.quality })
+      .from(chessMoveEvals)
+      .where(and(eq(chessMoveEvals.gameId, game.id), eq(chessMoveEvals.movedBy, game.playerColor)))
+      .all();
+    const mistakeCount = ownMoves.filter((m) => m.quality === "mistake" || m.quality === "blunder").length;
+    const avgCentipawnLoss = ownMoves.length
+      ? Math.round(ownMoves.reduce((sum, m) => sum + m.centipawnLoss, 0) / ownMoves.length)
+      : 0;
+    return { gameId: game.id, playedAt: game.playedAt, avgCentipawnLoss, mistakeCount, moveCount: ownMoves.length };
+  });
 }
 
 /** Upsert incrémental (occurrenceCount += 1) — seule table du module qui dévie du pattern

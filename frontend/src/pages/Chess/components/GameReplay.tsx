@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Chess, type Square } from "chess.js";
 import { CHESS_WEAKNESS_LABELS } from "@familyspeak/shared";
 import type { MoveQuality } from "@familyspeak/shared";
 import { fetchChessGame, fetchChessGameAnalysis, reanalyzeChessGame } from "../../../api/chess.js";
@@ -26,6 +27,13 @@ const QUALITY_LABELS: Record<MoveQuality, string> = {
   blunder: "Gaffe",
 };
 
+const BEST_MOVE_ARROW_COLOR = "rgb(16, 185, 129)";
+const PLAYED_MOVE_ARROW_COLOR = "rgb(239, 68, 68)";
+
+function uciToSquares(uci: string): [Square, Square] {
+  return [uci.slice(0, 2) as Square, uci.slice(2, 4) as Square];
+}
+
 export function GameReplay({ gameId, onBack }: GameReplayProps) {
   const queryClient = useQueryClient();
   const gameQuery = useQuery({ queryKey: ["chess", "game", gameId], queryFn: () => fetchChessGame(gameId) });
@@ -40,11 +48,40 @@ export function GameReplay({ gameId, onBack }: GameReplayProps) {
   });
 
   const moves = analysisQuery.data?.moves ?? [];
-  const [index, setIndex] = useState(-1); // -1 = position de départ
-
-  const fen = useMemo(() => (index < 0 ? "start" : (moves[index]?.fenBefore ?? "start")), [index, moves]);
+  const [index, setIndex] = useState(-1); // -1 = position de départ ; sinon index = dernier coup appliqué
   const currentMove = index >= 0 ? moves[index] : null;
   const game = gameQuery.data?.game;
+
+  // Le plateau doit refléter le coup qu'on est en train de commenter (sinon on affiche "b4 —
+  // Imprécision" alors que rien n'a bougé sur l'échiquier). moves[i+1].fenBefore est exactement
+  // le fenAfter du coup i (le même historique continu) — gratuit, pas besoin de le stocker en
+  // base. Seul le tout dernier coup n'a pas de "coup suivant" pour nous le donner : on le calcule
+  // nous-mêmes avec chess.js.
+  const fen = useMemo(() => {
+    if (index < 0) return "start";
+    if (index < moves.length - 1) return moves[index + 1]!.fenBefore;
+    const move = moves[index];
+    if (!move) return "start";
+    try {
+      const chess = new Chess(move.fenBefore);
+      chess.move(move.moveSan);
+      return chess.fen();
+    } catch {
+      return move.fenBefore;
+    }
+  }, [index, moves]);
+
+  const arrows = useMemo((): Array<[Square, Square, string?]> => {
+    if (!currentMove || currentMove.quality === "best") return [];
+    const arrowList: Array<[Square, Square, string?]> = [];
+    const [bestFrom, bestTo] = uciToSquares(currentMove.bestMoveUci);
+    arrowList.push([bestFrom, bestTo, BEST_MOVE_ARROW_COLOR]);
+    if (currentMove.moveUci !== currentMove.bestMoveUci) {
+      const [playedFrom, playedTo] = uciToSquares(currentMove.moveUci);
+      arrowList.push([playedFrom, playedTo, PLAYED_MOVE_ARROW_COLOR]);
+    }
+    return arrowList;
+  }, [currentMove]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -55,7 +92,7 @@ export function GameReplay({ gameId, onBack }: GameReplayProps) {
         <p className="truncate text-sm font-semibold text-slate-700">vs {game?.opponentName ?? "…"}</p>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        <ChessBoard fen={fen} boardOrientation={game?.playerColor ?? "white"} arePiecesDraggable={false} />
+        <ChessBoard fen={fen} boardOrientation={game?.playerColor ?? "white"} arePiecesDraggable={false} arrows={arrows} />
         {moves.length === 0 && game?.analysisStatus === "failed" && (
           <div className="mt-4 flex flex-col items-center gap-2">
             <p className="text-sm text-slate-400">L'analyse a échoué.</p>
@@ -80,7 +117,10 @@ export function GameReplay({ gameId, onBack }: GameReplayProps) {
               <p className="text-slate-500">Catégorie : {CHESS_WEAKNESS_LABELS[currentMove.mistakeCategory]}</p>
             )}
             {currentMove.moveSan !== currentMove.bestMoveSan && (
-              <p className="text-slate-500">Meilleur coup : {currentMove.bestMoveSan}</p>
+              <p className="text-slate-500">
+                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: BEST_MOVE_ARROW_COLOR }} />{" "}
+                Meilleur coup : {currentMove.bestMoveSan}
+              </p>
             )}
           </div>
         )}
