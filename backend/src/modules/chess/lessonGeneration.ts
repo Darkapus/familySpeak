@@ -1,7 +1,12 @@
 import { CHESS_WEAKNESS_LABELS, type WeaknessCategory } from "@familyspeak/shared";
 import { env } from "../../config/env.js";
 import { broadcastToUsers } from "../../ws/registry.js";
-import { getMostRecentLessonGeneratedAt, insertLesson, listWorstMovesForCategory } from "./repository.js";
+import {
+  getMostRecentLessonGeneratedAt,
+  getWeaknessOccurrenceCount,
+  insertLesson,
+  listWorstMovesForCategory,
+} from "./repository.js";
 
 const REQUEST_TIMEOUT_MS = 60_000;
 // Sans ce délai, ré-analyser un gros lot de parties (import, rejeu) fait franchir le seuil
@@ -63,6 +68,12 @@ async function requestHermesReply(history: HermesChatMessage[], sessionKey: stri
  * queue de jobs — un échec ici ne doit jamais faire échouer l'analyse qui l'a déclenché. */
 export async function maybeGenerateLessonForCategory(userId: string, category: WeaknessCategory): Promise<void> {
   if (!env.hermesEnabled) return;
+  // Auto-suffisant plutôt que déclenché sur un franchissement exact d'un multiple du seuil
+  // (l'ancienne logique, côté appelant) : un recalcul en masse du profil (recomputeWeaknessProfile,
+  // après un nettoyage d'import) fait bondir le compteur d'un coup, sans jamais "franchir" un
+  // multiple un par un, et ne déclenchait donc plus jamais aucune leçon.
+  const occurrences = getWeaknessOccurrenceCount(userId, category);
+  if (occurrences < env.chessLessonMinOccurrences) return;
   const lastGeneratedAt = getMostRecentLessonGeneratedAt(userId, category);
   if (lastGeneratedAt && Date.now() - lastGeneratedAt < LESSON_COOLDOWN_MS) return;
   const examples = listWorstMovesForCategory(userId, category, 3);

@@ -119,6 +119,9 @@ export interface ChessGameDTO {
   opponentName: string | null;
   timeControl: string | null;
   engineLevel: number | null;
+  /** Classement Elo chess.com de l'enfant sur cette partie (null pour une partie live contre le
+   * moteur, qui n'a pas d'équivalent comparable). */
+  playerElo: number | null;
   playedAt: number;
   analysisStatus: ChessAnalysisStatus;
   analyzedAt: number | null;
@@ -183,4 +186,5 @@ export interface ChessProgressPointDTO {
   avgCentipawnLoss: number;
   mistakeCount: number;
   moveCount: number;
+  playerElo: number | null;
 }

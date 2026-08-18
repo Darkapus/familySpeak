@@ -7,14 +7,7 @@ import type { EngineEvaluation } from "./engine.js";
 import { categorizeMistake } from "./mistakeHeuristics.js";
 import { replayPgnMoves } from "./pgnUtils.js";
 import { maybeGenerateLessonForCategory } from "./lessonGeneration.js";
-import {
-  bumpWeaknessProfile,
-  deleteMoveEvalsForGame,
-  getGameById,
-  getWeaknessOccurrenceCount,
-  insertMoveEvals,
-  updateGameAnalysisStatus,
-} from "./repository.js";
+import { bumpWeaknessProfile, deleteMoveEvalsForGame, getGameById, insertMoveEvals, updateGameAnalysisStatus } from "./repository.js";
 
 function uciToSan(fen: string, uci: string): string {
   try {
@@ -113,12 +106,12 @@ export async function analyzeGame(gameId: string): Promise<void> {
   for (const row of rows) {
     if (row.movedBy !== game.playerColor || !row.mistakeCategory) continue;
     bumpWeaknessProfile(game.userId, row.mistakeCategory, row.centipawnLoss);
-    const occurrences = getWeaknessOccurrenceCount(game.userId, row.mistakeCategory);
-    if (occurrences > 0 && occurrences % env.chessLessonMinOccurrences === 0) {
-      void maybeGenerateLessonForCategory(game.userId, row.mistakeCategory).catch((err) =>
-        console.error("Échec de la génération de leçon (tâche de fond):", err),
-      );
-    }
+    // maybeGenerateLessonForCategory décide elle-même si le seuil est atteint et si le délai
+    // depuis la dernière leçon de cette catégorie est passé — pas besoin de ne l'appeler que sur
+    // un franchissement exact d'un multiple ici.
+    void maybeGenerateLessonForCategory(game.userId, row.mistakeCategory).catch((err) =>
+      console.error("Échec de la génération de leçon (tâche de fond):", err),
+    );
   }
 
   updateGameAnalysisStatus(gameId, "done");

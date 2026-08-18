@@ -1,0 +1,1 @@
+ALTER TABLE `chess_games` ADD `player_elo` integer;

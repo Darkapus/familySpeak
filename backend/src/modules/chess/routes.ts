@@ -4,7 +4,13 @@ import type { ChessGameResult, ChessPlayerColor } from "@familyspeak/shared";
 import { env } from "../../config/env.js";
 import { requireAuth } from "../auth/guard.js";
 import { ChessComUserNotFoundError, fetchRecentGames } from "./chessComClient.js";
-import { detectPlayerColorFromHeaders, isParsablePgn, normalizeResultHeader, parsePgnHeaders } from "./pgnUtils.js";
+import {
+  detectPlayerColorFromHeaders,
+  extractPlayerElo,
+  isParsablePgn,
+  normalizeResultHeader,
+  parsePgnHeaders,
+} from "./pgnUtils.js";
 import { askAboutPosition } from "./positionChat.js";
 import { startAnalysisJobLoop } from "./jobQueue.js";
 import { broadcastToUsers } from "../../ws/registry.js";
@@ -140,6 +146,7 @@ export async function registerChessRoutes(app: FastifyInstance) {
         playerColor: color,
         opponentName: color === "white" ? (remoteGame.black?.username ?? null) : (remoteGame.white?.username ?? null),
         timeControl: remoteGame.time_control ?? null,
+        playerElo: extractPlayerElo(headers, color),
         playedAt: remoteGame.end_time * 1000,
       });
       if (inserted) {

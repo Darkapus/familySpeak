@@ -30,6 +30,14 @@ export function parsePgnHeaders(pgn: string): Record<string, string | null> {
   return chess.header();
 }
 
+/** Classement Elo chess.com de l'enfant sur cette partie (en-tête WhiteElo/BlackElo selon la
+ * couleur jouée), utilisé pour visualiser sa progression réelle dans le temps. */
+export function extractPlayerElo(headers: Record<string, string | null>, color: ChessPlayerColor): number | null {
+  const raw = color === "white" ? headers.WhiteElo : headers.BlackElo;
+  const value = raw ? Number(raw) : NaN;
+  return Number.isFinite(value) ? value : null;
+}
+
 /** Devine la couleur jouée par l'enfant en comparant son pseudo chess.com (insensible à la
  * casse) aux en-têtes White/Black du PGN. */
 export function detectPlayerColorFromHeaders(

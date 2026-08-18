@@ -192,6 +192,7 @@ export const chessGames = sqliteTable(
     opponentName: text("opponent_name"),
     timeControl: text("time_control"),
     engineLevel: integer("engine_level"),
+    playerElo: integer("player_elo"),
     playedAt: integer("played_at").notNull(),
     analysisStatus: text("analysis_status", { enum: ["none", "queued", "analyzing", "done", "failed"] })
       .notNull()

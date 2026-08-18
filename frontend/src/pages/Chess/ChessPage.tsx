@@ -10,6 +10,7 @@ import { GameHistoryList } from "./components/GameHistoryList.js";
 import { GameReplay } from "./components/GameReplay.js";
 import { ImportPanel } from "./components/ImportPanel.js";
 import { ProgressChart } from "./components/ProgressChart.js";
+import { RatingProgress } from "./components/RatingProgress.js";
 import { WeaknessProfilePanel } from "./components/WeaknessProfilePanel.js";
 import { LessonsPanel } from "./components/LessonsPanel.js";
 import { PuzzleTrainer } from "./components/PuzzleTrainer.js";
@@ -32,7 +33,10 @@ function ProgressTab() {
 
   return (
     <div>
-      <ProgressChart points={data?.points ?? []} />
+      <RatingProgress points={data?.points ?? []} />
+      <div className="border-t border-slate-100">
+        <ProgressChart points={data?.points ?? []} />
+      </div>
       <div className="border-t border-slate-100">
         <WeaknessProfilePanel />
       </div>

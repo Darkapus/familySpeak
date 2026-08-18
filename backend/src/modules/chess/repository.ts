@@ -37,6 +37,7 @@ function gameToDTO(row: ChessGameRow): ChessGameDTO {
     opponentName: row.opponentName,
     timeControl: row.timeControl,
     engineLevel: row.engineLevel,
+    playerElo: row.playerElo,
     playedAt: row.playedAt,
     analysisStatus: row.analysisStatus,
     analyzedAt: row.analyzedAt,
@@ -117,6 +118,7 @@ export function createLiveGame(input: {
     opponentName: `Stockfish (niveau ${input.engineLevel})`,
     timeControl: null,
     engineLevel: input.engineLevel,
+    playerElo: null,
     playedAt: Date.now(),
     analysisStatus: "none",
     analyzedAt: null,
@@ -135,6 +137,7 @@ export function insertImportedGame(input: {
   playerColor: ChessPlayerColor;
   opponentName: string | null;
   timeControl: string | null;
+  playerElo: number | null;
   playedAt: number;
 }): ChessGameDTO | null {
   const row: ChessGameRow = {
@@ -149,6 +152,7 @@ export function insertImportedGame(input: {
     opponentName: input.opponentName,
     timeControl: input.timeControl,
     engineLevel: null,
+    playerElo: input.playerElo,
     playedAt: input.playedAt,
     analysisStatus: "none",
     analyzedAt: null,
@@ -278,7 +282,7 @@ export function listWorstMovesForCategory(
  * (chess_puzzle) : plutôt qu'un jeu de données externe, on lui refait rejouer ses propres
  * erreurs les plus coûteuses. */
 export function listRecentMistakesForUser(userId: string, limit: number): ChessPuzzleDTO[] {
-  const rows = db
+  const allRows = db
     .select(moveEvalColumns)
     .from(chessMoveEvals)
     .innerJoin(chessGames, eq(chessMoveEvals.gameId, chessGames.id))
@@ -290,8 +294,14 @@ export function listRecentMistakesForUser(userId: string, limit: number): ChessP
       ),
     )
     .orderBy(desc(chessMoveEvals.centipawnLoss))
-    .limit(limit)
     .all();
+
+  // "other" (aucun schéma tactique reconnu par les heuristiques) n'apprend rien de nommable à
+  // l'enfant — on privilégie les erreurs rattachées à une vraie catégorie ("fourchette
+  // manquée", etc.) et on ne pioche dans "other" que si les autres catégories sont épuisées.
+  const categorized = allRows.filter((r) => r.mistakeCategory !== "other");
+  const uncategorized = allRows.filter((r) => r.mistakeCategory === "other");
+  const rows = [...categorized, ...uncategorized].slice(0, limit);
 
   return rows.map((row) => ({
     moveEvalId: row.id,
@@ -326,7 +336,14 @@ export function listGameProgressStats(userId: string): ChessProgressPointDTO[] {
     const avgCentipawnLoss = ownMoves.length
       ? Math.round(ownMoves.reduce((sum, m) => sum + m.centipawnLoss, 0) / ownMoves.length)
       : 0;
-    return { gameId: game.id, playedAt: game.playedAt, avgCentipawnLoss, mistakeCount, moveCount: ownMoves.length };
+    return {
+      gameId: game.id,
+      playedAt: game.playedAt,
+      avgCentipawnLoss,
+      mistakeCount,
+      moveCount: ownMoves.length,
+      playerElo: game.playerElo,
+    };
   });
 }
 
