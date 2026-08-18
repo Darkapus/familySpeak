@@ -8,6 +8,7 @@ import { LoginPage } from "./pages/Login/LoginPage.js";
 import { ConversationsPage } from "./pages/Conversations/ConversationsPage.js";
 
 const GamePage = lazy(() => import("./pages/Game/GamePage.js").then((m) => ({ default: m.GamePage })));
+const ChessPage = lazy(() => import("./pages/Chess/ChessPage.js").then((m) => ({ default: m.ChessPage })));
 
 export function App() {
   useAuthBootstrap();
@@ -38,6 +39,22 @@ export function App() {
                 }
               >
                 <GamePage />
+              </Suspense>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/chess"
+          element={
+            <RequireAuth>
+              <Suspense
+                fallback={
+                  <div className="flex h-[100dvh] items-center justify-center bg-white text-slate-500">
+                    Chargement des échecs…
+                  </div>
+                }
+              >
+                <ChessPage />
               </Suspense>
             </RequireAuth>
           }

@@ -1,4 +1,5 @@
 import type { GameBlockType } from "./game.js";
+import type { MoveQuality, WeaknessCategory } from "./chess.js";
 
 export type UserRole = "parent" | "child";
 
@@ -99,4 +100,64 @@ export interface PlayerHomeDTO {
   z: number;
   yaw: number;
   pitch: number;
+}
+
+export type ChessGameSource = "live" | "chess_com";
+export type ChessGameResult = "1-0" | "0-1" | "1/2-1/2" | "*";
+export type ChessPlayerColor = "white" | "black";
+export type ChessAnalysisStatus = "none" | "queued" | "analyzing" | "done" | "failed";
+
+export interface ChessGameDTO {
+  id: string;
+  userId: string;
+  source: ChessGameSource;
+  chessComUsername: string | null;
+  chessComGameUrl: string | null;
+  pgn: string;
+  result: ChessGameResult;
+  playerColor: ChessPlayerColor;
+  opponentName: string | null;
+  timeControl: string | null;
+  engineLevel: number | null;
+  playedAt: number;
+  analysisStatus: ChessAnalysisStatus;
+  analyzedAt: number | null;
+  createdAt: number;
+}
+
+export interface ChessMoveEvalDTO {
+  id: string;
+  gameId: string;
+  ply: number;
+  movedBy: ChessPlayerColor;
+  fenBefore: string;
+  moveSan: string;
+  moveUci: string;
+  bestMoveSan: string;
+  bestMoveUci: string;
+  evalBeforeCp: number;
+  evalAfterCp: number;
+  centipawnLoss: number;
+  quality: MoveQuality;
+  mistakeCategory: WeaknessCategory | null;
+}
+
+export interface ChessWeaknessProfileEntryDTO {
+  userId: string;
+  category: WeaknessCategory;
+  occurrenceCount: number;
+  totalCentipawnLoss: number;
+  lastOccurredAt: number;
+}
+
+export interface ChessLessonDTO {
+  id: string;
+  userId: string;
+  category: WeaknessCategory;
+  title: string;
+  contentMarkdown: string;
+  exampleGameId: string | null;
+  examplePly: number | null;
+  readAt: number | null;
+  generatedAt: number;
 }

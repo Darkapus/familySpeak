@@ -43,6 +43,13 @@
       "when": 1783373685161,
       "tag": "0005_lovely_pestilence",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1787084746849,
+      "tag": "0006_careful_sentinel",
+      "breakpoints": true
     }
   ]
 }

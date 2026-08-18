@@ -4,15 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "setup:stockfish": "node scripts/fetch-stockfish.mjs",
+    "dev": "node scripts/fetch-stockfish.mjs && vite",
+    "build": "node scripts/fetch-stockfish.mjs && tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
     "@familyspeak/shared": "workspace:*",
     "@tanstack/react-query": "^5.62.11",
+    "chess.js": "^1.4.0",
     "react": "^18.3.1",
+    "react-chessboard": "^4.7.3",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.1.1",

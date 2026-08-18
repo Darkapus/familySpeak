@@ -1,5 +1,17 @@
 import { sqliteTable, text, integer, real, primaryKey, index } from "drizzle-orm/sqlite-core";
 
+// Dupliqué depuis WEAKNESS_CATEGORIES (packages/shared/src/chess.ts) plutôt qu'importé : comme
+// pour GAME_BLOCK_TYPES/worldBlocks.blockType plus bas, drizzle-kit (esbuild) ne résout pas les
+// imports .js->.ts à travers la frontière du package @familyspeak/shared depuis schema.ts.
+const WEAKNESS_CATEGORY_VALUES = [
+  "hanging_piece",
+  "missed_fork",
+  "king_safety",
+  "missed_mate",
+  "endgame_technique",
+  "other",
+] as const;
+
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -162,6 +174,115 @@ export const worldBlocks = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
   },
   (table) => [primaryKey({ columns: [table.x, table.y, table.z] })],
+);
+
+export const chessGames = sqliteTable(
+  "chess_games",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    source: text("source", { enum: ["live", "chess_com"] }).notNull(),
+    chessComUsername: text("chess_com_username"),
+    chessComGameUrl: text("chess_com_game_url").unique(),
+    pgn: text("pgn").notNull(),
+    result: text("result", { enum: ["1-0", "0-1", "1/2-1/2", "*"] }).notNull(),
+    playerColor: text("player_color", { enum: ["white", "black"] }).notNull(),
+    opponentName: text("opponent_name"),
+    timeControl: text("time_control"),
+    engineLevel: integer("engine_level"),
+    playedAt: integer("played_at").notNull(),
+    analysisStatus: text("analysis_status", { enum: ["none", "queued", "analyzing", "done", "failed"] })
+      .notNull()
+      .default("none"),
+    analyzedAt: integer("analyzed_at"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("chess_games_user_id_idx").on(table.userId),
+    index("chess_games_user_id_played_at_idx").on(table.userId, table.playedAt),
+  ],
+);
+
+export const chessMoveEvals = sqliteTable(
+  "chess_move_evals",
+  {
+    id: text("id").primaryKey(),
+    gameId: text("game_id")
+      .notNull()
+      .references(() => chessGames.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    ply: integer("ply").notNull(),
+    movedBy: text("moved_by", { enum: ["white", "black"] }).notNull(),
+    fenBefore: text("fen_before").notNull(),
+    moveSan: text("move_san").notNull(),
+    moveUci: text("move_uci").notNull(),
+    bestMoveSan: text("best_move_san").notNull(),
+    bestMoveUci: text("best_move_uci").notNull(),
+    evalBeforeCp: integer("eval_before_cp").notNull(),
+    evalAfterCp: integer("eval_after_cp").notNull(),
+    centipawnLoss: integer("centipawn_loss").notNull(),
+    quality: text("quality", { enum: ["best", "good", "inaccuracy", "mistake", "blunder"] }).notNull(),
+    mistakeCategory: text("mistake_category", { enum: WEAKNESS_CATEGORY_VALUES }),
+  },
+  (table) => [
+    index("chess_move_evals_game_id_ply_idx").on(table.gameId, table.ply),
+    index("chess_move_evals_user_id_category_idx").on(table.userId, table.mistakeCategory),
+  ],
+);
+
+export const chessWeaknessProfile = sqliteTable(
+  "chess_weakness_profile",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    category: text("category", { enum: WEAKNESS_CATEGORY_VALUES }).notNull(),
+    occurrenceCount: integer("occurrence_count").notNull().default(0),
+    totalCentipawnLoss: integer("total_centipawn_loss").notNull().default(0),
+    lastOccurredAt: integer("last_occurred_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.category] })],
+);
+
+export const chessAnalysisJobs = sqliteTable(
+  "chess_analysis_jobs",
+  {
+    id: text("id").primaryKey(),
+    gameId: text("game_id")
+      .notNull()
+      .unique()
+      .references(() => chessGames.id),
+    status: text("status", { enum: ["pending", "processing", "done", "failed"] }).notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    createdAt: integer("created_at").notNull(),
+    startedAt: integer("started_at"),
+    finishedAt: integer("finished_at"),
+  },
+  (table) => [index("chess_analysis_jobs_status_created_at_idx").on(table.status, table.createdAt)],
+);
+
+export const chessLessons = sqliteTable(
+  "chess_lessons",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    category: text("category", { enum: WEAKNESS_CATEGORY_VALUES }).notNull(),
+    title: text("title").notNull(),
+    contentMarkdown: text("content_markdown").notNull(),
+    exampleGameId: text("example_game_id").references(() => chessGames.id),
+    examplePly: integer("example_ply"),
+    readAt: integer("read_at"),
+    generatedAt: integer("generated_at").notNull(),
+  },
+  (table) => [index("chess_lessons_user_id_generated_at_idx").on(table.userId, table.generatedAt)],
 );
 
 export const refreshTokens = sqliteTable(

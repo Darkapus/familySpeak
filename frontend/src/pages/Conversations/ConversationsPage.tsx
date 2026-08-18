@@ -65,6 +65,13 @@ export function ConversationsPage() {
             >
               🧱
             </button>
+            <button
+              onClick={() => navigate("/chess")}
+              aria-label="Échecs"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20 text-lg text-white hover:bg-white/30"
+            >
+              ♟️
+            </button>
             {user?.role === "parent" && (
               <button
                 onClick={() => setShowManageFamily((v) => !v)}

@@ -1,5 +1,6 @@
-import type { GamePlayerStateDTO, MessageDTO, PlayerHomeDTO } from "./types.js";
+import type { ChessAnalysisStatus, GamePlayerStateDTO, MessageDTO, PlayerHomeDTO } from "./types.js";
 import type { GameBlockType } from "./game.js";
+import type { WeaknessCategory } from "./chess.js";
 
 /** Messages envoyés du client vers le serveur. */
 export type ClientToServerEvent =
@@ -32,4 +33,7 @@ export type ServerToClientEvent =
   | { type: "game:player-moved"; payload: { userId: string; x: number; y: number; z: number; yaw: number; pitch: number } }
   | { type: "game:block-changed"; payload: { x: number; y: number; z: number; blockType: GameBlockType | null } }
   | { type: "game:home-set"; payload: PlayerHomeDTO }
+  | { type: "chess:job-updated"; payload: { gameId: string; userId: string; status: ChessAnalysisStatus } }
+  | { type: "chess:import-completed"; payload: { userId: string; importedCount: number; skippedCount: number } }
+  | { type: "chess:lesson-ready"; payload: { userId: string; lessonId: string; category: WeaknessCategory } }
   | { type: "error"; payload: { message: string } };
