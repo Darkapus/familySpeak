@@ -46,13 +46,16 @@ export async function fetchGamesForMonth(username: string, yearMonth: string): P
   return data?.games ?? [];
 }
 
-/** Récupère l'historique complet d'un joueur, mois par mois (séquentiel : usage familial ponctuel,
- * pas besoin de paralléliser et ça évite de solliciter l'API chess.com trop agressivement). */
-export async function fetchAllGames(username: string): Promise<ChessComGame[]> {
-  const months = await fetchArchiveMonths(username);
-  const games: ChessComGame[] = [];
-  for (const yearMonth of months) {
-    games.push(...(await fetchGamesForMonth(username, yearMonth)));
+/** Récupère les `limit` parties les plus récentes d'un joueur, en partant du mois le plus
+ * récent et en remontant mois par mois jusqu'à en avoir assez — plutôt que tout l'historique
+ * (qui peut représenter des milliers de parties pour un compte actif) : ce sont les parties
+ * récentes qui reflètent le niveau actuel de l'enfant, pas celles d'il y a plusieurs années. */
+export async function fetchRecentGames(username: string, limit: number): Promise<ChessComGame[]> {
+  const months = await fetchArchiveMonths(username); // ordre chronologique croissant
+  const collected: ChessComGame[] = [];
+  for (let i = months.length - 1; i >= 0 && collected.length < limit; i--) {
+    collected.push(...(await fetchGamesForMonth(username, months[i]!)));
   }
-  return games;
+  collected.sort((a, b) => b.end_time - a.end_time);
+  return collected.slice(0, limit);
 }

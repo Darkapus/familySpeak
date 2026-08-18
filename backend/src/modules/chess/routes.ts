@@ -3,7 +3,7 @@ import { CHESS_ENGINE_SKILL_MAX, CHESS_ENGINE_SKILL_MIN } from "@familyspeak/sha
 import type { ChessGameResult, ChessPlayerColor } from "@familyspeak/shared";
 import { env } from "../../config/env.js";
 import { requireAuth } from "../auth/guard.js";
-import { ChessComUserNotFoundError, fetchAllGames } from "./chessComClient.js";
+import { ChessComUserNotFoundError, fetchRecentGames } from "./chessComClient.js";
 import { detectPlayerColorFromHeaders, isParsablePgn, normalizeResultHeader, parsePgnHeaders } from "./pgnUtils.js";
 import { askAboutPosition } from "./positionChat.js";
 import { startAnalysisJobLoop } from "./jobQueue.js";
@@ -19,6 +19,11 @@ import {
   listWeaknessProfile,
   markLessonRead,
 } from "./repository.js";
+
+// Les 10 dernières parties reflètent le niveau actuel de l'enfant ; tout l'historique d'un
+// compte chess.com actif depuis des années serait beaucoup moins représentatif et beaucoup
+// plus lourd à analyser.
+const RECENT_GAMES_IMPORT_LIMIT = 10;
 
 function canAccess(request: FastifyRequest, targetUserId: string): boolean {
   return request.user.sub === targetUserId || request.user.role === "parent";
@@ -104,7 +109,7 @@ export async function registerChessRoutes(app: FastifyInstance) {
 
     let games;
     try {
-      games = await fetchAllGames(username);
+      games = await fetchRecentGames(username, RECENT_GAMES_IMPORT_LIMIT);
     } catch (err) {
       if (err instanceof ChessComUserNotFoundError) {
         return reply.code(400).send({ error: err.message });

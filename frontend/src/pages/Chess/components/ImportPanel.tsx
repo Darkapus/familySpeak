@@ -21,7 +21,9 @@ export function ImportPanel() {
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      <p className="text-sm text-slate-600">Importe ton historique de parties depuis chess.com.</p>
+      <p className="text-sm text-slate-600">
+        Importe tes 10 dernières parties depuis chess.com (les plus récentes, pour refléter ton niveau actuel).
+      </p>
       <div className="flex gap-2">
         <input
           value={username}
