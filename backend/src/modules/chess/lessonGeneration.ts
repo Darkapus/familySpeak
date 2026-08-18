@@ -1,9 +1,14 @@
 import { CHESS_WEAKNESS_LABELS, type WeaknessCategory } from "@familyspeak/shared";
 import { env } from "../../config/env.js";
 import { broadcastToUsers } from "../../ws/registry.js";
-import { insertLesson, listWorstMovesForCategory } from "./repository.js";
+import { getMostRecentLessonGeneratedAt, insertLesson, listWorstMovesForCategory } from "./repository.js";
 
 const REQUEST_TIMEOUT_MS = 60_000;
+// Sans ce délai, ré-analyser un gros lot de parties (import, rejeu) fait franchir le seuil
+// d'occurrences plusieurs dizaines de fois d'affilée pour la même catégorie, et déclenche donc
+// autant d'appels Hermes quasi simultanés — au détriment des requêtes interactives (chat de
+// position) qui se retrouvent à attendre derrière et finissent par expirer.
+const LESSON_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
 interface HermesChatMessage {
   role: "system" | "user" | "assistant";
@@ -58,6 +63,8 @@ async function requestHermesReply(history: HermesChatMessage[], sessionKey: stri
  * queue de jobs — un échec ici ne doit jamais faire échouer l'analyse qui l'a déclenché. */
 export async function maybeGenerateLessonForCategory(userId: string, category: WeaknessCategory): Promise<void> {
   if (!env.hermesEnabled) return;
+  const lastGeneratedAt = getMostRecentLessonGeneratedAt(userId, category);
+  if (lastGeneratedAt && Date.now() - lastGeneratedAt < LESSON_COOLDOWN_MS) return;
   const examples = listWorstMovesForCategory(userId, category, 3);
   if (examples.length === 0) return;
 

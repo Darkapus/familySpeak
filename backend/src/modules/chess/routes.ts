@@ -18,6 +18,8 @@ import {
   listMoveEvalsForGame,
   listWeaknessProfile,
   markLessonRead,
+  pruneOldChessComGames,
+  recomputeWeaknessProfile,
 } from "./repository.js";
 
 // Les 10 dernières parties reflètent le niveau actuel de l'enfant ; tout l'historique d'un
@@ -145,6 +147,14 @@ export async function registerChessRoutes(app: FastifyInstance) {
         skippedCount++;
       }
     }
+
+    // Chaque import ne doit refléter que les parties récentes : on retire les anciennes parties
+    // chess.com qui sortent de la fenêtre des RECENT_GAMES_IMPORT_LIMIT plus récentes (en cascade :
+    // leçons, coups analysés, jobs), puis on reconstruit le profil de faiblesses à partir de ce
+    // qui reste, plutôt que de laisser un historique qui grossit indéfiniment et pollue le profil
+    // avec des parties d'il y a des mois/années.
+    pruneOldChessComGames(request.user.sub, RECENT_GAMES_IMPORT_LIMIT);
+    recomputeWeaknessProfile(request.user.sub);
 
     broadcastToUsers([request.user.sub], {
       type: "chess:import-completed",

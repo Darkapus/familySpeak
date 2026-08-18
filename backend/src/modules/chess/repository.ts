@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import {
   chessAnalysisJobs,
@@ -159,6 +159,28 @@ export function getGameById(id: string): ChessGameDTO | undefined {
   return row ? gameToDTO(row) : undefined;
 }
 
+/** Ne garde que les `keep` parties chess.com les plus récentes d'un utilisateur (toutes sources
+ * chess_com confondues, quel que soit le pseudo importé) et supprime les autres en cascade
+ * (leçons qui les référencent, coups analysés, jobs, puis la partie elle-même) — dans cet ordre
+ * à cause des clés étrangères (foreign_keys = ON). Les vieilles parties d'un historique complet
+ * n'ont aucun intérêt pédagogique (niveau d'il y a des mois/années) et ne devraient pas rester à
+ * analyser ni polluer le profil de faiblesses. */
+export function pruneOldChessComGames(userId: string, keep: number): void {
+  const rows = db
+    .select({ id: chessGames.id })
+    .from(chessGames)
+    .where(and(eq(chessGames.userId, userId), eq(chessGames.source, "chess_com")))
+    .orderBy(desc(chessGames.playedAt))
+    .all();
+  const toDelete = rows.slice(keep).map((r) => r.id);
+  if (toDelete.length === 0) return;
+
+  db.delete(chessLessons).where(inArray(chessLessons.exampleGameId, toDelete)).run();
+  db.delete(chessMoveEvals).where(inArray(chessMoveEvals.gameId, toDelete)).run();
+  db.delete(chessAnalysisJobs).where(inArray(chessAnalysisJobs.gameId, toDelete)).run();
+  db.delete(chessGames).where(inArray(chessGames.id, toDelete)).run();
+}
+
 export function updateGameAnalysisStatus(gameId: string, status: ChessAnalysisStatus): void {
   db.update(chessGames)
     .set({ analysisStatus: status, analyzedAt: status === "done" ? Date.now() : null })
@@ -236,6 +258,40 @@ export function bumpWeaknessProfile(userId: string, category: WeaknessCategory, 
       },
     })
     .run();
+}
+
+/** Reconstruit entièrement le profil de faiblesses d'un utilisateur à partir des
+ * chess_move_evals actuellement en base (après un pruneOldChessComGames par exemple, où les
+ * compteurs incrémentaux de bumpWeaknessProfile ne peuvent plus être décrémentés proprement). */
+export function recomputeWeaknessProfile(userId: string): void {
+  const games = db.select().from(chessGames).where(eq(chessGames.userId, userId)).all();
+  const totals = new Map<WeaknessCategory, { count: number; loss: number; lastAt: number }>();
+  for (const game of games) {
+    const moves = db.select().from(chessMoveEvals).where(eq(chessMoveEvals.gameId, game.id)).all();
+    for (const move of moves) {
+      if (move.movedBy !== game.playerColor || !move.mistakeCategory) continue;
+      const entry = totals.get(move.mistakeCategory) ?? { count: 0, loss: 0, lastAt: 0 };
+      entry.count += 1;
+      entry.loss += move.centipawnLoss;
+      entry.lastAt = Math.max(entry.lastAt, game.playedAt);
+      totals.set(move.mistakeCategory, entry);
+    }
+  }
+
+  db.delete(chessWeaknessProfile).where(eq(chessWeaknessProfile.userId, userId)).run();
+  const now = Date.now();
+  for (const [category, entry] of totals) {
+    db.insert(chessWeaknessProfile)
+      .values({
+        userId,
+        category,
+        occurrenceCount: entry.count,
+        totalCentipawnLoss: entry.loss,
+        lastOccurredAt: entry.lastAt || now,
+        updatedAt: now,
+      })
+      .run();
+  }
 }
 
 export function listWeaknessProfile(userId: string): ChessWeaknessProfileEntryDTO[] {
@@ -325,6 +381,17 @@ export function insertLesson(input: {
   };
   db.insert(chessLessons).values(row).run();
   return lessonToDTO(row);
+}
+
+export function getMostRecentLessonGeneratedAt(userId: string, category: WeaknessCategory): number | undefined {
+  const row = db
+    .select({ generatedAt: chessLessons.generatedAt })
+    .from(chessLessons)
+    .where(and(eq(chessLessons.userId, userId), eq(chessLessons.category, category)))
+    .orderBy(desc(chessLessons.generatedAt))
+    .limit(1)
+    .get();
+  return row?.generatedAt;
 }
 
 export function listLessonsForUser(userId: string): ChessLessonDTO[] {
