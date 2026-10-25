@@ -14,6 +14,7 @@ import { registerPushRoutes } from "./modules/push/routes.js";
 import { registerSignupRequestRoutes } from "./modules/signup-requests/routes.js";
 import { registerGameRoutes } from "./modules/game/routes.js";
 import { registerChessRoutes } from "./modules/chess/routes.js";
+import { registerOrthographeRoutes } from "./modules/orthographe/routes.js";
 
 export function buildApp() {
   const app = Fastify({
@@ -46,6 +47,7 @@ export function buildApp() {
   app.register(registerSignupRequestRoutes, { prefix: "/api/signup-requests" });
   app.register(registerGameRoutes, { prefix: "/api/game" });
   app.register(registerChessRoutes, { prefix: "/api/chess" });
+  app.register(registerOrthographeRoutes, { prefix: "/api/orthographe" });
 
   return app;
 }

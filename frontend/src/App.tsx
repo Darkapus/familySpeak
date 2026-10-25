@@ -10,6 +10,10 @@ import { ConversationsPage } from "./pages/Conversations/ConversationsPage.js";
 const GamePage = lazy(() => import("./pages/Game/GamePage.js").then((m) => ({ default: m.GamePage })));
 const ChessPage = lazy(() => import("./pages/Chess/ChessPage.js").then((m) => ({ default: m.ChessPage })));
 
+const OrthographePage = lazy(() =>
+  import("./pages/Orthographe/OrthographePage.js").then((m) => ({ default: m.OrthographePage })),
+);
+
 export function App() {
   useAuthBootstrap();
   usePwaAutoReload();
@@ -55,6 +59,20 @@ export function App() {
                 }
               >
                 <ChessPage />
+              </Suspense>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/orthographe"
+          element={
+            <RequireAuth>
+              <Suspense
+                fallback={
+                  <div className="flex h-[100dvh] items-center justify-center bg-white text-slate-500">Chargement…</div>
+                }
+              >
+                <OrthographePage />
               </Suspense>
             </RequireAuth>
           }

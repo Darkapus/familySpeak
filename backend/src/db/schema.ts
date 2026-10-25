@@ -286,6 +286,22 @@ export const chessLessons = sqliteTable(
   (table) => [index("chess_lessons_user_id_generated_at_idx").on(table.userId, table.generatedAt)],
 );
 
+// Dupliqué depuis ORTHO_CATEGORIES (packages/shared/src/orthographe.ts), même raison que ci-dessus.
+export const orthoAttempts = sqliteTable(
+  "ortho_attempts",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    itemId: text("item_id").notNull(),
+    category: text("category", { enum: ["pluriel", "feminin", "verbe", "homophone", "participe"] }).notNull(),
+    correct: integer("correct", { mode: "boolean" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [index("ortho_attempts_user_id_created_at_idx").on(table.userId, table.createdAt)],
+);
+
 export const refreshTokens = sqliteTable(
   "refresh_tokens",
   {

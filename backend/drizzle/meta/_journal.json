@@ -57,6 +57,13 @@
       "when": 1787091496216,
       "tag": "0007_left_doctor_faustus",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1792963087249,
+      "tag": "0008_flawless_spiral",
+      "breakpoints": true
     }
   ]
 }
